@@ -75,21 +75,19 @@ using gtsam::symbol_shorthand::M;  // integer ddambiguities
 using gtsam::symbol_shorthand::A;  // acceleration
 using gtsam::symbol_shorthand::O;
 
-namespace gnss_fgo
-{
-    class GNSSFGOBoreasNode : public GNSSFGOLocalizationBase
-    {
-    protected:
-        fgo::buffer::CircularDataBuffer<fgo::data_types::PVASolution> pvaBuffer_;
-        rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subPVAGT_;
+namespace gnss_fgo {
+  class GNSSFGOBoreasNode : public GNSSFGOLocalizationBase {
+  protected:
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subPVAGT_;
 
-    protected:
-        void onPVAGTMsgCb(nav_msgs::msg::Odometry::ConstSharedPtr pva);
-        void calculateErrorOnState(const fgo::data_types::State& state) override;
+  protected:
+    void onPVAGTMsgCb(nav_msgs::msg::Odometry::ConstSharedPtr pva);
 
-    public:
-        explicit GNSSFGOBoreasNode(const rclcpp::NodeOptions &opt);
-    };
+    void calculateErrorOnState(const fgo::data::State &state) override;
+
+  public:
+    explicit GNSSFGOBoreasNode(const rclcpp::NodeOptions &opt);
+  };
 
 }
 

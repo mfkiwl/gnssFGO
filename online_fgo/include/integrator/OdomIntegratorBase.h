@@ -24,21 +24,18 @@
 
 #include "IntegratorBase.h"
 
-namespace fgo::integrator
-{
-    class OdomIntegratorBase : public IntegratorBase
-    {
-    protected:
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
-        IntegratorOdomParamsPtr paramPtr_;
-        std::vector<fgo::data_types::OdomResult> odomResults_;
+namespace fgo::integrator {
+  class OdomIntegratorBase : public IntegratorBase {
+  protected:
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
+    IntegratorOdomParamsPtr paramPtr_;
+    std::vector<fgo::data_types::OdomResult> odomResults_;
 
-    public:
-        explicit OdomIntegratorBase() = default;
+  public:
+    explicit OdomIntegratorBase() = default;
 
 
-
-    };
+  };
 }
 #endif //ONLINE_FGO_ODOMINTEGRATORBASE_H

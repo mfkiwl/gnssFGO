@@ -28,18 +28,8 @@
 
 #pragma once
 
-#include <ostream>
-#include <boost/lexical_cast.hpp>
-#include <gtsam/geometry/concepts.h>
-#include <gtsam/geometry/Pose3.h>
-#include <gtsam/nonlinear/NonlinearFactor.h>
-#include <gtsam/base/Testable.h>
-#include <gtsam/base/Lie.h>
-#include <gtsam/base/numericalDerivative.h>
-
-#include "utils/GPutils.h"
-#include "utils/Pose3utils.h"
-#include "factor/FactorTypeIDs.h"
+#include <gtsam/nonlinear/Marginals.h>
+#include "GPPriorBase.h"
 
 namespace fgo::factor {
 
@@ -47,195 +37,227 @@ namespace fgo::factor {
  * 4-way factor for Gaussian Process prior factor, SE(3) version
  * 6-DOF velocity is represented by 3-DOF translational and 3-DOF rotational velocities (in body frame).
  */
-    class GPWNOAPriorPose3 : public gtsam::NoiseModelFactor6<gtsam::Pose3,
-            gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> {
+  class GPWNOAPriorPose3 : public GPPriorBase,
+                           public gtsam::NoiseModelFactor6<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3,
+                             gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> {
 
-    private:
-      typedef GPWNOAPriorPose3 This;
-      typedef gtsam::NoiseModelFactor6<gtsam::Pose3,
-              gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> Base;
+  private:
+    typedef GPWNOAPriorPose3 This;
+    typedef gtsam::NoiseModelFactor6<gtsam::Pose3,
+      gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> Base;
 
-    public:
-      GPWNOAPriorPose3() = default;    /* Default constructor only for serialization */
+  public:
+    GPWNOAPriorPose3() = default;    /* Default constructor only for serialization */
 
-      /// Constructor
-      /// @param delta_t is the time between the two states
-      double delta_t_{};
-      bool useAutoDiff_ = false;
-      bool calcJacobian_ = false;
+    /// Constructor
+    /// @param delta_t is the time between the two states
 
-      GPWNOAPriorPose3(
-              gtsam::Key poseKey1, gtsam::Key velKey1, gtsam::Key omegaKey1,
-              gtsam::Key poseKey2, gtsam::Key velKey2, gtsam::Key omegaKey2,
-              double dt, const gtsam::SharedNoiseModel &Qc_model, bool useAutoDiff = false, bool calcJacobian = true) :
-              Base(gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ<6>(fgo::utils::getQc(Qc_model), dt)),
-                   poseKey1, velKey1, omegaKey1, poseKey2, velKey2, omegaKey2), delta_t_(dt), useAutoDiff_(useAutoDiff), calcJacobian_(calcJacobian)
-                   {
-                     factorTypeID_ = FactorTypeIDs::GPWNOAMotionPrior;
-                     factorName_ = "GPWNOAPriorPose3";
-                   }
+    GPWNOAPriorPose3(
+      gtsam::Key poseKey1, gtsam::Key velKey1, gtsam::Key omegaKey1,
+      gtsam::Key poseKey2, gtsam::Key velKey2, gtsam::Key omegaKey2,
+      double dt, const gtsam::SharedNoiseModel &Qc_model, bool useAutoDiff = false, bool calcJacobian = true) :
+      GPPriorBase(dt, useAutoDiff, calcJacobian),
+      Base(gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ<6>(fgo::utils::getQc(Qc_model), dt)),
+           poseKey1, velKey1, omegaKey1, poseKey2, velKey2, omegaKey2) {
+      factorTypeID_ = FactorTypeID::GPWNOAMotionPrior;
+      factorName_ = "GPWNOAPriorPose3Factor";
+    }
 
-      ~GPWNOAPriorPose3() override = default;
+    ~GPWNOAPriorPose3() override = default;
 
 
-      /// @return a deep copy of this factor
-      [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::static_pointer_cast<gtsam::NonlinearFactor>(
-                gtsam::NonlinearFactor::shared_ptr(new This(*this)));
-      }
+    /// @return a deep copy of this factor
+    [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
+      return boost::static_pointer_cast<gtsam::NonlinearFactor>(
+        gtsam::NonlinearFactor::shared_ptr(new This(*this)));
+    }
 
-      /// factor error function
-      [[nodiscard]] gtsam::Vector evaluateError(
-              const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
-              const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2, const gtsam::Vector3 &omega2,
-              boost::optional<gtsam::Matrix &> H1 = boost::none,
-              boost::optional<gtsam::Matrix &> H2 = boost::none,
-              boost::optional<gtsam::Matrix &> H3 = boost::none,
-              boost::optional<gtsam::Matrix &> H4 = boost::none,
-              boost::optional<gtsam::Matrix &> H5 = boost::none,
-              boost::optional<gtsam::Matrix &> H6 = boost::none
-      ) const override {
+    /// factor error function
+    [[nodiscard]] gtsam::Vector evaluateError(
+      const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
+      const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2, const gtsam::Vector3 &omega2,
+      boost::optional<gtsam::Matrix &> H1 = boost::none,
+      boost::optional<gtsam::Matrix &> H2 = boost::none,
+      boost::optional<gtsam::Matrix &> H3 = boost::none,
+      boost::optional<gtsam::Matrix &> H4 = boost::none,
+      boost::optional<gtsam::Matrix &> H5 = boost::none,
+      boost::optional<gtsam::Matrix &> H6 = boost::none
+    ) const override {
 
-        using namespace gtsam;
-        using namespace fgo::utils;
+      using namespace gtsam;
+      using namespace fgo::utils;
 
-        if(useAutoDiff_)
-        {
-          // jacobians
-          if (H1) {
-            *H1 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
-                boost::bind(&This::evaluateError_, this, boost::placeholders::_1, vel1, omega1, pose2, vel2, omega2),
-                pose1, 1e-5);
-          }
-          if (H2) {
-            *H2 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-                boost::bind(&This::evaluateError_, this, pose1, boost::placeholders::_1, omega1, pose2, vel2, omega2),
-                vel1, 1e-5);
-          }
-          if (H3) {
-            *H3 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-                boost::bind(&This::evaluateError_, this, pose1, vel1, boost::placeholders::_1, pose2, vel2, omega2),
-                omega1, 1e-5);
-          }
-          if (H4) {
-            *H4 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
-                boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, boost::placeholders::_1, vel2, omega2),
-                pose2, 1e-5);
-          }
-          if (H5) {
-            *H5 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-                boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, boost::placeholders::_1, omega2),
-                vel2, 1e-5);
-          }
-          if (H6) {
-            *H6 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-                boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, boost::placeholders::_1),
-                omega2, 1e-5);
-          }
-          return evaluateError_(pose1, vel1, omega1, pose2, vel2, omega2);
+      if (useAutoDiff_) {
+        // jacobians
+        if (H1) {
+          *H1 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
+            boost::bind(&This::evaluateError_, this, boost::placeholders::_1, vel1, omega1, pose2, vel2, omega2),
+            pose1, 1e-5);
         }
+        if (H2) {
+          *H2 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
+            boost::bind(&This::evaluateError_, this, pose1, boost::placeholders::_1, omega1, pose2, vel2, omega2),
+            vel1, 1e-5);
+        }
+        if (H3) {
+          *H3 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
+            boost::bind(&This::evaluateError_, this, pose1, vel1, boost::placeholders::_1, pose2, vel2, omega2),
+            omega1, 1e-5);
+        }
+        if (H4) {
+          *H4 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, boost::placeholders::_1, vel2, omega2),
+            pose2, 1e-5);
+        }
+        if (H5) {
+          *H5 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, boost::placeholders::_1, omega2),
+            vel2, 1e-5);
+        }
+        if (H6) {
+          *H6 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, boost::placeholders::_1),
+            omega2, 1e-5);
+        }
+        return evaluateError_(pose1, vel1, omega1, pose2, vel2, omega2);
+      } else {
+        Matrix6 Hinv, Hcomp1, Hcomp2, Hlogmap;
+        Vector6 r;
+        if (H1 || H4)
+          r = Pose3::Logmap(pose1.inverse(&Hinv).compose(pose2, &Hcomp1, &Hcomp2), &Hlogmap);
         else
-        {
-          Matrix6 Hinv, Hcomp1, Hcomp2, Hlogmap;
-          Vector6 r;
-          if(H1 || H4)
-            r = Pose3::Logmap(pose1.inverse(&Hinv).compose(pose2, &Hcomp1, &Hcomp2), &Hlogmap);
-          else
-            r = Pose3::Logmap(pose1.inverse().compose(pose2));
+          r = Pose3::Logmap(pose1.inverse().compose(pose2));
 
-          Matrix6 Jinv = (gtsam::Matrix6() << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, gtsam::I_3x3).finished();
-          if(calcJacobian_)
-            Jinv = fgo::utils::rightJacobianPose3inv(r);
+        Matrix6 Jinv = (gtsam::Matrix6() << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, gtsam::I_3x3).finished();
+        if (calcJacobian_)
+          Jinv = fgo::utils::rightJacobianPose3inv(r);
 
-          Matrix63 H1v, H1w, H2v, H2w;
-          Matrix6 H1p, H2p;
-          Matrix_12_6 Hv1, Hv2;
+        Matrix63 H1v, H1w, H2v, H2w;
+        Matrix6 H1p, H2p;
+        Matrix_12_6 Hv1, Hv2;
 
-          Vector6 v1, v2;
+        Vector6 v1, v2;
 
-          if(H2 || H3 || H5 || H6)
-          {
-            v1 = convertVwWbToVbWb(vel1, omega1, pose1, &H1v, &H1w, &H1p);
-            v2 = convertVwWbToVbWb(vel2, omega2, pose2, &H2v, &H2w, &H2p);
-            Hv1 = (Matrix_12_6() << -delta_t_ * Matrix6::Identity(), -Matrix6::Identity()).finished();
-            Hv2 = (Matrix_12_6() << Matrix6::Zero(), Jinv).finished();
-          } else {
-            v1 = convertVwWbToVbWb(vel1, omega1, pose1);
-            v2 = convertVwWbToVbWb(vel2, omega2, pose2);
-          }
-
-          Matrix6 Jdiff = Matrix6::Zero();
-          if((H1 || H4) && calcJacobian_)
-            Jdiff = jacobianMethodNumercialDiff(rightJacobianPose3inv, r, v2);
-
-          if(H1)
-          {
-            const Matrix6 J_Ti = Hlogmap * Hcomp1 * Hinv;
-            Matrix6 Jdiff_Ti = Matrix6::Zero();
-            if(calcJacobian_)
-              Jdiff_Ti = Jdiff * J_Ti;
-            *H1 = (Matrix_12_6() << J_Ti - delta_t_ * H1p, Jdiff_Ti - H1p).finished();
-          }
-          if (H2) *H2 = Hv1 * H1v;
-          if (H3) *H3 = Hv1 * H1w;
-
-          if (H4) {
-            const Matrix6 J_Tj = Hlogmap * Hcomp2;
-            Matrix6 Jdiff_Tj = Matrix6::Zero();
-            if(calcJacobian_)
-              Jdiff_Tj = Jdiff * J_Tj;
-            *H4 = (Matrix_12_6() << J_Tj, Jdiff_Tj + Jinv * H2p).finished();
-          }
-
-          if (H5) *H5 = Hv2 * H2v;
-          if (H6) *H6 = Hv2 * H2w;
-
-          Vector err = (Vector(12) << (r - v1 * delta_t_), Jinv * v2 - v1).finished();
-
-          return err;
+        if (H2 || H3 || H5 || H6) {
+          v1 = convertVwWbToVbWb(vel1, omega1, pose1, &H1v, &H1w, &H1p);
+          v2 = convertVwWbToVbWb(vel2, omega2, pose2, &H2v, &H2w, &H2p);
+          Hv1 = (Matrix_12_6() << -delta_t_ * Matrix6::Identity(), -Matrix6::Identity()).finished();
+          Hv2 = (Matrix_12_6() << Matrix6::Zero(), Jinv).finished();
+        } else {
+          v1 = convertVwWbToVbWb(vel1, omega1, pose1);
+          v2 = convertVwWbToVbWb(vel2, omega2, pose2);
         }
-      }
 
-      [[nodiscard]] gtsam::Vector evaluateError_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
-                                                 const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2,
-                                                 const gtsam::Vector3 &omega2) const {
+        Matrix6 Jdiff = Matrix6::Zero();
+        if ((H1 || H4) && calcJacobian_)
+          Jdiff = jacobianMethodNumercialDiff(rightJacobianPose3inv, r, v2);
 
+        if (H1) {
+          const Matrix6 J_Ti = Hlogmap * Hcomp1 * Hinv;
+          Matrix6 Jdiff_Ti = Matrix6::Zero();
+          if (calcJacobian_)
+            Jdiff_Ti = Jdiff * J_Ti;
+          *H1 = (Matrix_12_6() << J_Ti - delta_t_ * H1p, Jdiff_Ti - H1p).finished();
+        }
+        if (H2) *H2 = Hv1 * H1v;
+        if (H3) *H3 = Hv1 * H1w;
 
-        gtsam::Vector6 r = gtsam::Pose3::Logmap(pose1.inverse().compose(pose2));
-        gtsam::Matrix6 Jinv = fgo::utils::rightJacobianPose3inv(r);
-        gtsam::Vector6 v1 = utils::convertVwWbToVbWb(vel1, omega1, pose1);
-        gtsam::Vector6 v2 = utils::convertVwWbToVbWb(vel2, omega2, pose2);
+        if (H4) {
+          const Matrix6 J_Tj = Hlogmap * Hcomp2;
+          Matrix6 Jdiff_Tj = Matrix6::Zero();
+          if (calcJacobian_)
+            Jdiff_Tj = Jdiff * J_Tj;
+          *H4 = (Matrix_12_6() << J_Tj, Jdiff_Tj + Jinv * H2p).finished();
+        }
+
+        if (H5) *H5 = Hv2 * H2v;
+        if (H6) *H6 = Hv2 * H2w;
+
         gtsam::Vector err = (gtsam::Vector(12) << (r - v1 * delta_t_), Jinv * v2 - v1).finished();
+
         return err;
       }
+    }
 
-      /** equals specialized to this factor */
-      bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
-        const This *e = dynamic_cast<const This *> (&expected);
-        return e != nullptr && Base::equals(*e, tol) && fabs(this->delta_t_ - e->delta_t_) < tol;
+    [[nodiscard]] gtsam::Vector
+    evaluateError_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
+                   const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2,
+                   const gtsam::Vector3 &omega2) const {
+
+
+      gtsam::Vector6 r = gtsam::Pose3::Logmap(pose1.inverse().compose(pose2));
+      gtsam::Matrix6 Jinv = fgo::utils::rightJacobianPose3inv(r);
+      gtsam::Vector6 v1 = utils::convertVwWbToVbWb(vel1, omega1, pose1);
+      gtsam::Vector6 v2 = utils::convertVwWbToVbWb(vel2, omega2, pose2);
+      gtsam::Vector err = (gtsam::Vector(12) << (r - v1 * delta_t_), Jinv * v2 - v1).finished();
+      return err;
+    }
+
+    /** equals specialized to this factor */
+    bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
+      const This *e = dynamic_cast<const This *> (&expected);
+      return e != nullptr && Base::equals(*e, tol) && fabs(this->delta_t_ - e->delta_t_) < tol;
+    }
+
+    /** print contents */
+    void print(const std::string &s = "",
+               const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
+      std::cout << s << "4-way Gaussian Process Factor Pose3 VW" << std::endl;
+      Base::print("", keyFormatter);
+    }
+
+    /** lifting all related state values in a vector after the ordering for evaluateError **/
+    gtsam::Vector liftValuesAsVector(const gtsam::Values &values) override {
+      const auto poseI = values.at<gtsam::Pose3>(key1());
+      const auto velI = values.at<gtsam::Vector3>(key2());
+      const auto omegaI = values.at<gtsam::Vector3>(key3());
+      const auto poseJ = values.at<gtsam::Pose3>(key4());
+      const auto velJ = values.at<gtsam::Vector3>(key5());
+      const auto omegaJ = values.at<gtsam::Vector3>(key6());
+      const auto liftedStates = (gtsam::Vector(24) << poseI.rotation().rpy(),
+        poseI.translation(),
+        velI, omegaI,
+        poseJ.rotation().rpy(),
+        poseJ.translation(),
+        velJ, omegaJ).finished();
+      return liftedStates;
+    }
+
+    gtsam::Values generateValuesFromStateVector(const gtsam::Vector &state) override {
+      assert(state.size() != 24);
+      gtsam::Values values;
+      try {
+        values.insert(key1(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(0, 0)),
+                                           gtsam::Point3(state.block<3, 1>(3, 0))));
+        values.insert(key2(), gtsam::Vector3(state.block<3, 1>(6, 0)));
+        values.insert(key3(), gtsam::Vector3(state.block<3, 1>(9, 0)));
+        values.insert(key4(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(12, 0)),
+                                           gtsam::Point3(state.block<3, 1>(15, 0))));
+        values.insert(key5(), gtsam::Vector3(state.block<3, 1>(18, 0)));
+        values.insert(key6(), gtsam::Vector3(state.block<3, 1>(21, 0)));
       }
-
-      /** print contents */
-      void print(const std::string &s = "",
-                 const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
-        std::cout << s << "4-way Gaussian Process Factor Pose3 VW" << std::endl;
-        Base::print("", keyFormatter);
+      catch (std::exception &ex) {
+        std::cout << "Factor " << getName() << " cannot generate values from state vector " << state << " due to "
+                  << ex.what() << std::endl;
       }
+      return values;
+    }
 
-    private:
 
-      /** Serialization function */
-      //friend class boost::serialization::access;
+  private:
 
-      template<class ARCHIVE>
-      void serialize(ARCHIVE &ar, const unsigned int version) {
-        ar & BOOST_SERIALIZATION_BASE_OBJECT_NVP(Base);
-        ar & BOOST_SERIALIZATION_NVP(delta_t_);
-      }
+    /** Serialization function */
+    //friend class boost::serialization::access;
 
-    }; // GaussianProcessPriorPose3
+    template<class ARCHIVE>
+    void serialize(ARCHIVE &ar, const unsigned int version) {
+      ar & BOOST_SERIALIZATION_BASE_OBJECT_NVP(Base);
+      ar & BOOST_SERIALIZATION_NVP(delta_t_);
+    }
 
-  } // namespace fgo
+  }; // GaussianProcessPriorPose3
+
+} // namespace fgo
 
 
 
@@ -243,7 +265,8 @@ namespace fgo::factor {
 namespace gtsam {
   template<>
   struct traits<fgo::factor::GPWNOAPriorPose3>
-          : public Testable<fgo::factor::GPWNOAPriorPose3> {
+    : public Testable<fgo::factor::GPWNOAPriorPose3> {
   };
 }
 #endif //FGONAV_GAUSSIANPROCESSPRIORPOSE3VNWB_H
+

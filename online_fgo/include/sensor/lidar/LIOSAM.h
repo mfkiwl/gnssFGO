@@ -55,8 +55,8 @@
 #include "integrator/param/IntegratorParams.h"
 #include "integrator/IntegratorBase.h"
 #include "model/gp_interpolator/GPInterpolatorBase.h"
-#include "model/gp_interpolator/GPWNOAInterpolatorPose3.h"
-#include "model/gp_interpolator/GPWNOJInterpolatorPose3.h"
+#include "model/gp_interpolator/GPWNOAInterpolator.h"
+#include "model/gp_interpolator/GPWNOJInterpolator.h"
 
 
 namespace sensors::LiDAR::LIOSAM
@@ -97,27 +97,27 @@ namespace sensors::LiDAR::LIOSAM
         LIOSAMParam params_;
         std::mutex mutex_;
         std::mutex mutexLoop_;
-        fgo::buffer::CircularDataBuffer<fgo::data_types::State> imuStateBuffer_;
-        fgo::buffer::CircularDataBuffer<fgo::data_types::Pose> posePriorECEFBufferTmp_;
-        fgo::buffer::CircularDataBuffer<fgo::data_types::Pose> posePriorBuffer_;
-        fgo::buffer::CircularDataBuffer<fgo::data_types::Odom> odomBuffer_;
-        fgo::buffer::CircularDataBuffer<fgo::data_types::Odom> loopClosureBuffer_;
+        fgo::data::CircularDataBuffer<fgo::data::State> imuStateBuffer_;
+        fgo::data::CircularDataBuffer<fgo::data::Pose> posePriorECEFBufferTmp_;
+        fgo::data::CircularDataBuffer<fgo::data::Pose> posePriorBuffer_;
+        fgo::data::CircularDataBuffer<fgo::data::Odom> odomBuffer_;
+        fgo::data::CircularDataBuffer<fgo::data::Odom> loopClosureBuffer_;
 
         std::shared_mutex mutexKeyPoseIndexTimestampMap_;
         std::map<uint64_t, double> cloudKeyPoseIndexTimestampMap_;
         lio_sam::msg::CloudInfo currentCloudInfo_;
-        fgo::buffer::CircularDataBuffer<lio_sam::msg::CloudInfo> lidarInputBuffer_;
+        fgo::data::CircularDataBuffer<lio_sam::msg::CloudInfo> lidarInputBuffer_;
         std::shared_ptr<std::thread> odomMainThread_;
         std::atomic_uint64_t keyPoseCounter_ = 1;
 
-        fgo::data_types::QueryStateOutput lastQueryStateOutput_;
+        fgo::data::QueryStateOutput lastQueryStateOutput_;
         double timestampLastKeyPose_ = -1.;
         double timestampLastScan_ = -1.;
 
         std::mutex optPoseMutex_;
-        std::map<size_t, std::pair<rclcpp::Time, fgo::data_types::QueryStateInput>> optPoseIndexPairMap_;
+        std::map<size_t, std::pair<rclcpp::Time, fgo::data::QueryStateInput>> optPoseIndexPairMap_;
         fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap currentOptPoseIndexTimestampMap_;
-        //fgo::buffer::CircularDataBuffer<gtsam::Vector6> AccBuffer_;
+        //fgo::data::CircularDataBuffer<gtsam::Vector6> AccBuffer_;
         std::shared_ptr<fgo::models::GPInterpolator> interpolator_;
 
         bool isDegenerate_ = false;
@@ -309,7 +309,7 @@ namespace sensors::LiDAR::LIOSAM
 
         std::tuple<bool, double, double> LiDARLMOptimization(size_t iterCount);
 
-        void laserCloudInfoHandler(const lio_sam::msg::CloudInfo::SharedPtr msg);
+        void laserCloudInfoCb(const lio_sam::msg::CloudInfo::SharedPtr msg);
 
         void loopClosureThread();
 
@@ -520,9 +520,9 @@ namespace sensors::LiDAR::LIOSAM
          * @param timestamp timestamp of the lidar scan
          * @return all information about the queried state (lidar pose)
          */
-        fgo::data_types::QueryStateOutput queryLiDARPoseFromOptPose(const rclcpp::Time& timestamp)
+        fgo::data::QueryStateOutput queryLiDARPoseFromOptPose(const rclcpp::Time& timestamp)
         {
-          fgo::data_types::QueryStateOutput output;
+          fgo::data::QueryStateOutput output;
           using namespace fgo::integrator;
           using namespace gtsam::symbol_shorthand;
           ExcutiveLockGuard lg(optPoseMutex_);
@@ -588,7 +588,7 @@ namespace sensors::LiDAR::LIOSAM
               return output;
             }
             const double delta_t = syncResult.timestampJ - syncResult.timestampI;
-            if(integratorParamPtr_->gpType == fgo::data_types::GPModelType::WNOJ)
+            if(integratorParamPtr_->gpType == fgo::data::GPModelType::WNOJ)
             {
               interpolator_->recalculate(delta_t, syncResult.durationFromStateI, inputI.acc, inputJ.acc);
               output.accI = inputI.acc;
@@ -870,7 +870,7 @@ namespace sensors::LiDAR::LIOSAM
                                                                          utils::ros::QoSGeneral,
                                                                          [this](const lio_sam::msg::CloudInfo::SharedPtr msg)->void
                                                                          {
-                                                                             this->laserCloudInfoHandler(msg);
+                                                                             this->laserCloudInfoCb(msg);
                                                                          },
                                                                          subCloudOpt);
           if(0 && params_.loopClosureEnableFlag)
@@ -890,12 +890,12 @@ namespace sensors::LiDAR::LIOSAM
                                                         },
                                                         groupVisualization);
 
-          if(integratorParamPtr_->gpType == fgo::data_types::GPModelType::WNOJ){
-            interpolator_ = std::make_shared<fgo::models::GPWNOJInterpolatorPose3>(
+          if(integratorParamPtr_->gpType == fgo::data::GPModelType::WNOJ){
+            interpolator_ = std::make_shared<fgo::models::GPWNOJInterpolator>(
                 gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
                 integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
-          } else if(integratorParamPtr_->gpType == fgo::data_types::GPModelType::WNOA) {
-            interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
+          } else if(integratorParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
+            interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
                 gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
                 integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
           } else {
@@ -916,13 +916,15 @@ namespace sensors::LiDAR::LIOSAM
           odomMainThread_->join();
         }
 
+        void laserCloudInfoHandler(const lio_sam::msg::CloudInfo &msg);
+
         /**
          * update current global propagated pose for pose querying point cloud callback
          * @param id id of the state, equals to nState_
          * @param timestamp timestamp pf the state id
          * @param input all information about the state, see struct definition
          */
-        void updateOptPose(size_t id, const rclcpp::Time& timestamp, const fgo::data_types::QueryStateInput& input)
+        void updateOptPose(size_t id, const rclcpp::Time& timestamp, const fgo::data::QueryStateInput& input)
         {
           ExcutiveLockGuard lg(optPoseMutex_);
           auto iter = optPoseIndexPairMap_.find(id);
@@ -1049,15 +1051,15 @@ namespace sensors::LiDAR::LIOSAM
           keyPoseCounter_ -= step;
         }
 
-        std::vector<fgo::data_types::Odom> getOdomAndClean()
+        std::vector<fgo::data::Odom> getOdomAndClean()
         {
-          std::vector<fgo::data_types::Odom> odom = odomBuffer_.get_all_buffer_and_clean();
+          std::vector<fgo::data::Odom> odom = odomBuffer_.get_all_buffer_and_clean();
           return odom;
         }
 
-        std::vector<fgo::data_types::Odom> getLoopClosureAndClean()
+        std::vector<fgo::data::Odom> getLoopClosureAndClean()
         {
-          std::vector<fgo::data_types::Odom> odom = loopClosureBuffer_.get_all_buffer_and_clean();
+          std::vector<fgo::data::Odom> odom = loopClosureBuffer_.get_all_buffer_and_clean();
           return odom;
         }
 

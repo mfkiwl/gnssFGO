@@ -22,57 +22,62 @@
 #include <string>
 #include "data/DataTypes.h"
 
-namespace gnss_fgo{
-    struct GNSSFGOParams
-    {
-        bool verbose = false;
-        bool useIMUAsTimeReference = false;
-        int optFrequency = 10; // 10 Hz
-        int stateFrequency = 10;
-        int bufferSize = 100;
+namespace gnss_fgo {
+  struct GNSSFGOParams {
+    bool offlineProcess = false;
+    bool verbose = false;
+    bool useIMUAsTimeReference = false;
+    int optFrequency = 10; // 10 Hz
+    int stateFrequency = 10;
+    int bufferSize = 100;
 
-        bool calibGravity = true;
-        bool calcErrorOnOpt = false;
-        bool delayFromPPS = false;
-        double pvtMeasTimeOffset = 0.;
+    bool addIMUFactor = true;
 
-        double accelerometerSigma = 0.0008;
-        double integrationSigma = 1e-4;
-        double gyroscopeSigma = 0.00052;
-        double biasAccSigma = 0.0004;
-        double biasOmegaSigma = 0.00087;
-        double biasAccOmegaInt = 0.00001;
-        uint IMUMeasurementFrequency = 100;  // 10 Hz
+    bool calibGravity = true;
+    bool calcErrorOnOpt = false;
+    bool delayFromPPS = false;
+    double pvtMeasTimeOffset = 0.;
 
-        bool useGPPriorFactor = false;
-        bool useGPInterpolatedFactor = false;
-        fgo::data_types::GPModelType gpType = fgo::data_types::GPModelType::WNOA;
+    bool imuMessageHasUncertainty = false;
+    double accelerometerSigma = 0.0008;
+    double integrationSigma = 1e-4;
+    double gyroscopeSigma = 0.00052;
+    double biasAccSigma = 0.0004;
+    double biasOmegaSigma = 0.00087;
+    double biasAccOmegaInt = 0.00001;
+    uint IMUMeasurementFrequency = 100;  // 10 Hz
 
-        gtsam::Point3 transIMUToCorrevit = gtsam::Point3(0, 0, 0);
-        gtsam::Point3 transIMUToReference = gtsam::Point3(0, 0, 0);
+    bool addGPPriorFactor = false;
+    bool addGPInterpolatedFactor = false;
+    fgo::data::GPModelType gpType = fgo::data::GPModelType::Singer;
+    bool fullGPPrior = false;
 
-        gtsam::Rot3 rotIMUToReference = gtsam::Rot3();
-        gtsam::Point3 transIMUToAnt1 = gtsam::Point3(0, 0, 0);  // lever arm between imu and phase center of main antenna
-        gtsam::Point3 transIMUToAnt2 = gtsam::Point3(0, 0, 0);
-        gtsam::Point3 transIMUToLiDAR = gtsam::Point3(0.339560, 0, -0.0787);
-        gtsam::Rot3 rotIMUtoLiDAR = gtsam::Rot3::Roll(-M_PI);
+    gtsam::Point3 transIMUToCorrevit = gtsam::Point3(0, 0, 0);
+    gtsam::Point3 transIMUToReference = gtsam::Point3(0, 0, 0);
 
-        bool UsePPSTimeSync = true;
+    gtsam::Rot3 rotIMUToReference = gtsam::Rot3();
+    gtsam::Point3 transIMUToAnt1 = gtsam::Point3(0, 0, 0);  // lever arm between imu and phase center of main antenna
+    gtsam::Point3 transIMUToAnt2 = gtsam::Point3(0, 0, 0);
+    gtsam::Point3 transIMUToLiDAR = gtsam::Point3(0.339560, 0, -0.0787);
+    gtsam::Rot3 rotIMUtoLiDAR = gtsam::Rot3::Roll(-M_PI);
 
-        // Initializer
-        bool initGyroBiasAsZero = true;
-        bool cleanIMUonInit = true;
-        bool useHeaderTimestamp = true;
-        gtsam::Rot3 imuRot = gtsam::Rot3::Identity();
+    bool UsePPSTimeSync = true;
 
-        // publisher
-        //bool pubNavFixAntMain = true;
-        //bool pubNavFixAntAux = false;
+    // Initializer
+    bool initGyroBiasAsZero = true;
+    bool cleanIMUOnInit = true;
+    bool useHeaderTimestamp = true;
+    gtsam::Rot3 imuRot = gtsam::Rot3::Identity();
 
-        virtual ~GNSSFGOParams()
-        = default;
-    };
-    typedef std::shared_ptr<GNSSFGOParams> GNSSFGOParamsPtr;
+    // publisher
+    //bool pubNavFixAntMain = true;
+    //bool pubNavFixAntAux = false;
+
+    virtual ~GNSSFGOParams()
+    = default;
+  };
+
+  typedef std::shared_ptr<GNSSFGOParams> GNSSFGOParamsPtr;
 }
 
 #endif //GNSS_FGO_ONLINEFGOPARAMS_H

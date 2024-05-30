@@ -19,64 +19,66 @@
 #ifndef ONLINE_FGO_LIOINTEGRATOR_H
 #define ONLINE_FGO_LIOINTEGRATOR_H
 
-#include <gtsam/slam/BetweenFactor.h>
+
 #include "IntegratorBase.h"
-#include "factor/measurement/odometry/GPInterpolatedDoublePose3BetweenFactor.h"
-#include "factor/measurement/odometry/GPInterpolatedSinglePose3BetweenFactor.h"
+#include "factor/odometry/BetweenFactor.h"
+#include "factor/odometry/GPInterpolatedDoublePose3BetweenFactor.h"
+#include "factor/odometry/GPInterpolatedSinglePose3BetweenFactor.h"
 #include "sensor/lidar/LIOSAM.h"
 #include "sensor/lidar/LIOSAMUtils.h"
 
-namespace fgo::integrator
-{
-    using namespace sensors::LiDAR::LIOSAM;
+namespace fgo::integrator {
+  using namespace sensors::LiDAR::LIOSAM;
 
-    class LIOIntegrator : public IntegratorBase
-    {
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
-        IntegratorOdomParamsPtr integratorParamPtr_;
-        std::vector<fgo::data_types::OdomResult> odomResults_;
-        std::shared_ptr<sensors::LiDAR::LIOSAM::LIOSAMOdometry> LIOSAM_;
+  class LIOIntegrator : public IntegratorBase {
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
+    IntegratorOdomParamsPtr integratorParamPtr_;
+    std::vector<fgo::data::OdomResult> odomResults_;
+    std::shared_ptr<sensors::LiDAR::LIOSAM::LIOSAMOdometry> LIOSAM_;
 
-    public:
-        explicit LIOIntegrator() = default;
-        ~LIOIntegrator() override = default;
+  public:
+    explicit LIOIntegrator() = default;
 
-        void initialize(rclcpp::Node& node, fgo::graph::GraphBase& graphPtr, const std::string& integratorName, bool isPrimarySensor = false) override;
+    ~LIOIntegrator() override = default;
 
-        bool factorize(
-            const boost::circular_buffer<std::pair<double, gtsam::Vector3>>& timestampGyroMap,
-            const boost::circular_buffer<std::pair<size_t, gtsam::Vector6>>& stateIDAccMap,
-            const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap& currentKeyIndexTimestampMap,
-            std::vector<std::pair<rclcpp::Time, fgo::data_types::State>>& timePredStates,
-            gtsam::Values& values,
-            fgo::solvers::FixedLagSmoother::KeyTimestampMap& keyTimestampMap,
-            gtsam::KeyVector& relatedKeys) override;
+    void initialize(rclcpp::Node &node, fgo::graph::GraphBase &graphPtr, const std::string &integratorName,
+                    bool isPrimarySensor = false) override;
 
-        std::map<uint64_t, double> factorizeAsPrimarySensor() override;
+    void feedRAWData(const lio_sam::msg::CloudInfo &msg) {
+      LIOSAM_->laserCloudInfoHandler(msg);
+    }
 
-        bool fetchResult(
-            const gtsam::Values& result,
-            const gtsam::Marginals& martinals,
-            const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap& keyIndexTimestampMap,
-            fgo::data_types::State& optState
-        ) override;
+    bool addFactors(
+      const boost::circular_buffer<std::pair<double, gtsam::Vector3>> &timestampGyroMap,
+      const boost::circular_buffer<std::pair<size_t, gtsam::Vector6>> &stateIDAccMap,
+      const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap &currentKeyIndexTimestampMap,
+      std::vector<std::pair<rclcpp::Time, fgo::data::State>> &timePredStates,
+      gtsam::Values &values,
+      fgo::solvers::FixedLagSmoother::KeyTimestampMap &keyTimestampMap,
+      gtsam::KeyVector &relatedKeys) override;
 
-        bool checkHasMeasurements() override
-        {
-          return !LIOSAM_->hasOdom();
-        }
+    std::map<uint64_t, double> factorizeAsPrimarySensor() override;
 
-        void cleanBuffers() override
-        {
-          LIOSAM_->cleanBuffer();
-        }
+    bool fetchResult(
+      const gtsam::Values &result,
+      const gtsam::Marginals &martinals,
+      const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap &keyIndexTimestampMap,
+      fgo::data::State &optState
+    ) override;
 
-        void notifyOptimization(double noOptimizationDuration) override
-        {
-          noOptimizationDuration_ = noOptimizationDuration;
-          LIOSAM_->notifyOptimization();
-        }
-    };
+    bool checkHasMeasurements() override {
+      return !LIOSAM_->hasOdom();
+    }
+
+    void cleanBuffers() override {
+      LIOSAM_->cleanBuffer();
+    }
+
+    void notifyOptimization(double noOptimizationDuration) override {
+      noOptimizationDuration_ = noOptimizationDuration;
+      LIOSAM_->notifyOptimization();
+    }
+  };
 }
 #endif //ONLINE_FGO_LIOINTEGRATOR_H

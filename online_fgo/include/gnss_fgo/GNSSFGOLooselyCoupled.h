@@ -34,24 +34,22 @@
 #include "GNSSFGOTimeCentric.h"
 
 
-namespace gnss_fgo
-{
+namespace gnss_fgo {
 
-class GNSSFGOGTNode : public GNSSFGOLocalizationBase
-{
-protected:
+  class GNSSFGOGTNode : public GNSSFGOLocalizationBase {
+  protected:
     // Data and Data Buffer
-    fgo::data_types::State lastlastOptimizedState_;
+    fgo::data::State lastlastOptimizedState_;
     rclcpp::Subscription<irt_nav_msgs::msg::PVAGeodetic>::SharedPtr subPVA_;
 
-protected:
+  protected:
     //callback for pvtGeodetic (own thread)
-    void onPVAMsgCb(const irt_nav_msgs::msg::PVAGeodetic::ConstSharedPtr& pvtMsg);
+    void onPVAMsgCb(const irt_nav_msgs::msg::PVAGeodetic::ConstSharedPtr &pvtMsg);
 
-public:
+  public:
     explicit GNSSFGOGTNode(const rclcpp::NodeOptions &opt);
 
-};
+  };
 
 }
 

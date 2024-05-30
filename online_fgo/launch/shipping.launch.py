@@ -1,11 +1,11 @@
 import os
-
 import yaml
 from ament_index_python.packages import get_package_share_directory
-from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, Command
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+from launch import LaunchDescription
 
 
 def get_params(p):
@@ -58,8 +58,8 @@ def generate_launch_description():
         namespace="boreas",
         output='screen',
         emulate_tty=True,
-        #prefix=['gdb -ex run --args'],
-        #arguments=['--ros-args', '--log-level', logger],
+        # prefix=['gdb -ex run --args'],
+        # arguments=['--ros-args', '--log-level', logger],
         parameters=[
             config_common_path,
             default_config_common,
@@ -69,28 +69,27 @@ def generate_launch_description():
 
             }
             # Overriding
-            #{
-            #}
+            # {
+            # }
         ]  # ,
         # remapping=[
         #
         # ]
     )
 
-
     plot_node = Node(
         package='rqt_plot',
         executable='rqt_plot',
         name="rqt_plot_fgo",
         output='screen',
-        #arguments=['--ros-args', '--log-level', logger],
+        # arguments=['--ros-args', '--log-level', logger],
         parameters=[
             {
                 "use_sim_time": True
             }
             # Overriding
-            #{
-            #}
+            # {
+            # }
         ]  # ,
     )
     # Define LaunchDescription variable and return it
@@ -105,7 +104,6 @@ def generate_launch_description():
     ld.add_action(declare_config_optimizer_path_cmd)
     ld.add_action(online_fgo_node)
 
-   # ld.add_action(plot_node)
-
+    # ld.add_action(plot_node)
 
     return ld

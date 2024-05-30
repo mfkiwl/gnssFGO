@@ -19,50 +19,84 @@
 
 #ifndef ONLINE_FGO_FACTORTYPEIDS_H
 #define ONLINE_FGO_FACTORTYPEIDS_H
+#pragma once
 
-namespace fgo::factor
-{
-    enum FactorTypeIDs
+namespace fgo::factor {
+  enum FactorTypeID : unsigned int {
+    CombinedIMU = 0,
+    GPWNOJMotionPrior = 1,
+    GPWNOAMotionPrior = 2,
+    ReceiverClock = 3,
+    NavPose = 4,
+    GPNavPose = 5,
+    NavAttitude = 6,
+    GPNavAttitude = 7,
+    NavVelocity = 8,
+    GPNavVelocity = 9,
+    BetweenPose = 10,
+    GPDoubleBetweenPose = 11,
+    GPSingleBetweenPose = 12,
+    GPS = 13,
+    GPGPS = 14,
+    PVT = 15,
+    GPPVT = 16,
+    PRDR = 17,
+    GPPRDR = 18,
+    PR = 19,
+    GPPR = 20,
+    DR = 21,
+    GPDR = 22,
+    TDCP = 23,   // not used
+    GPTDCP = 24, // not used
+    DDCP = 25,   // not used
+    GPDDCP = 26, // not used
+    DDPR = 27,
+    GPDDPR = 28,
+    DDPRDR = 29,
+    GPDDPRDR = 30,
+    TDCP3 = 31,   // not used
+    GPTDCP3 = 32,  // not used
+    ConstVelocity = 33,  // not used
+    ConstAngularVelocity = 34,
+    ConstAcceleration = 35,
+    GPSingerMotionPrior = 36,
+  };
+
+  static const std::map<std::string, unsigned int> FactorNameIDMap =
     {
-        CombinedIMU = 0,
-        GPWNOJMotionPrior = 1,
-        GPWNOAMotionPrior = 2,
-        ReceiverClock = 3,
-        NavPose = 4,
-        GPNavPose = 5,
-        NavAttitude = 6,
-        GPNavAttitude = 7,
-        NavVelocity = 8,
-        GPNavVelocity = 9,
-        BetweenPose = 10,
-        GPDoubleBetweenPose = 11,
-        GPSingleBetweenPose = 12,
-        GPS = 13,
-        GPGPS = 14,
-        PVT = 15,
-        GPPVT = 16,
-        PRDR = 17,
-        GPPRDR = 18,
-        PR = 19,
-        GPPR = 20,
-        DR = 21,
-        GPDR = 22,
-        TDCP = 23,
-        GPTDCP = 24,
-        DDCP = 25,
-        GPDDCP = 26,
-        DDPR = 27,
-        GPDDPR = 28,
-        DDPRDR = 29,
-        GPDDPRDR = 30,
-        TDCP3 = 31,
-        GPTDCP3 = 32,
-        ConstVelocity = 33,
-        ConstAngularVelocity = 34,
-        ConstAcceleration = 35
+      {"CombinedIMUFactor",                      FactorTypeID::CombinedIMU},
+      {"GPWNOAPriorPose3Factor",                 FactorTypeID::GPWNOAMotionPrior},
+      {"GPWNOJPriorPose3Factor",                 FactorTypeID::GPWNOJMotionPrior},
+      {"GPSingerPriorPose3Factor",               FactorTypeID::GPSingerMotionPrior},
+      {"ConstDriftFactor",                       FactorTypeID::ReceiverClock},
+      {"NavPoseFactor",                          FactorTypeID::NavPose},
+      {"GPInterpolatedNavPoseFactor",            FactorTypeID::GPNavPose},
+      {"NavAttitudeFactor",                      FactorTypeID::NavAttitude},
+      {"GPInterpolatedNavAttitudeFactor",        FactorTypeID::GPNavAttitude},
+      {"NavVelocityFactor",                      FactorTypeID::NavVelocity},
+      {"GPInterpolatedNavVelocityFactor",        FactorTypeID::GPNavVelocity},
+      {"BetweenPoseFactor",                      FactorTypeID::BetweenPose},
+      {"GPInterpolatedDoublePose3BetweenFactor", FactorTypeID::GPDoubleBetweenPose},
+      {"GPInterpolatedSinglePose3BetweenFactor", FactorTypeID::GPSingleBetweenPose},
+      {"GPSFactor",                              FactorTypeID::GPS},
+      {"GPInterpolatedGPSFactor",                FactorTypeID::GPGPS},
+      {"PVTFactor",                              FactorTypeID::PVT},
+      {"GPInterpolatedPVTFactor",                FactorTypeID::GPPVT},
+      {"PrDrFactor",                             FactorTypeID::PRDR},
+      {"GPInterpolatedPrDrFactor",               FactorTypeID::GPPRDR},
+      {"PrFactor",                               FactorTypeID::PR},
+      {"GPInterpolatedPrFactor",                 FactorTypeID::GPPR},
+      {"DrFactor",                               FactorTypeID::DR},
+      {"GPInterpolatedDrFactor",                 FactorTypeID::GPDR},
+      //{"NavAttitudeFactor", FactorTypeID::DDPR},
+      // {"NavAttitudeFactor", FactorTypeID::GPDDPR},
+      {"DDPrDrFactor",                           FactorTypeID::DDPRDR},
+      {"GPInterpolatedDDPrDrFactor",             FactorTypeID::GPDDPRDR},
+      {"ConstAngularRateFactor",                 FactorTypeID::ConstAngularVelocity},
+      {"ConstAccelerationFactor",                FactorTypeID::ConstAcceleration},
     };
-}
 
+}
 
 
 #endif //ONLINE_FGO_FACTORTYPEIDS_H

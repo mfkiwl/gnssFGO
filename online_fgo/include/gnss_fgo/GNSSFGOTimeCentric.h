@@ -33,7 +33,7 @@
 
 namespace gnss_fgo {
 
-  class GNSSFGOTimeCentricNode : public GNSSFGOLocalizationBase{
+  class GNSSFGOTimeCentricNode : public GNSSFGOLocalizationBase {
 
   protected:
     // ROS Variables
@@ -54,9 +54,8 @@ namespace gnss_fgo {
      */
     explicit GNSSFGOTimeCentricNode(const rclcpp::NodeOptions &opt);
 
-    ~GNSSFGOTimeCentricNode() override
-    {
-      if(optThread_)
+    ~GNSSFGOTimeCentricNode() override {
+      if (optThread_)
         optThread_->join();
     }
 

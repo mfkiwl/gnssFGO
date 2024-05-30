@@ -29,25 +29,25 @@ TEST(GPPriorPose3WNOA, Constructor) {
   gtsam::Vector9 error = factor.evaluateError(posei, veli, posej, velj, H1, H2, H3, H4);
 //CREATE ERROR
   gtsam::Matrix96 H1e = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
-          boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, boost::placeholders::_1,
-                      veli, posej, velj,
-                      boost::none, boost::none, boost::none, boost::none), posei);
+    boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, boost::placeholders::_1,
+                veli, posej, velj,
+                boost::none, boost::none, boost::none, boost::none), posei);
   gtsam::Matrix93 H2e = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-          boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, posei,
-                      boost::placeholders::_1, posej, velj,
-                      boost::none, boost::none, boost::none, boost::none), veli);
+    boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, posei,
+                boost::placeholders::_1, posej, velj,
+                boost::none, boost::none, boost::none, boost::none), veli);
   gtsam::Matrix96 H3e = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
-          boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, posei, veli,
-                      boost::placeholders::_1, velj,
-                      boost::none, boost::none, boost::none, boost::none), posej);
+    boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, posei, veli,
+                boost::placeholders::_1, velj,
+                boost::none, boost::none, boost::none, boost::none), posej);
   gtsam::Matrix93 H4e = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-          boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, posei, veli, posej,
-                      boost::placeholders::_1,
-                      boost::none, boost::none, boost::none, boost::none), velj);
+    boost::bind(&fgo::factors::GaussianProcessPriorPose3VnWb::evaluateError, &factor, posei, veli, posej,
+                boost::placeholders::_1,
+                boost::none, boost::none, boost::none, boost::none), velj);
   gtsam::Matrix66 E2B = (gtsam::Matrix66()
-          << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, posei.rotation().matrix()).finished();
+    << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, posei.rotation().matrix()).finished();
   gtsam::Matrix66 E2B2 = (gtsam::Matrix66()
-          << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, posej.rotation().matrix()).finished();
+    << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, posej.rotation().matrix()).finished();
   H1e = H1e * E2B.transpose(); //H1 position in ECEF and Hexpected position in Body,
   // so have to rotate, when pose has rotation
   H3e = H3e * E2B2.transpose(); //because of auto diff correction already in factor
@@ -58,8 +58,8 @@ TEST(GPPriorPose3WNOA, Constructor) {
   gtsam::Vector6 r = gtsam::Pose3::Logmap(gtsam::Pose3(posei.rotation().inverse() * posej.rotation(),
                                                        -posei.translation() + posej.translation()));
   gtsam::Vector9 errore = (gtsam::Vector9() << (r - vel2 * deltat), (
-          posej.rotation().transpose() * vel2.block<3, 1>(3, 0) -
-          posei.rotation().transpose() * vel1.block<3, 1>(3, 0))).finished();
+    posej.rotation().transpose() * vel2.block<3, 1>(3, 0) -
+    posei.rotation().transpose() * vel1.block<3, 1>(3, 0))).finished();
 //PRINT
 /*
 std::cout << "H1e :" << H1e << std::endl;
@@ -75,11 +75,11 @@ std::cout << "H3e - H3 :" << H3e - H3 << std::endl;
 std::cout << "errore :" << errore << std::endl;
 std::cout << "error :" << error << std::endl;
 */
-  EXPECT(gtsam::assert_equal(error,errore,1e-2));
-  EXPECT(gtsam::assert_equal(H1,H1e,1e-2));
-  EXPECT(gtsam::assert_equal(H2,H2e,1e-2));
-  EXPECT(gtsam::assert_equal(H3,H3e,1e-2));
-  EXPECT(gtsam::assert_equal(H4,H4e,1e-2));
+  EXPECT(gtsam::assert_equal(error, errore, 1e-2));
+  EXPECT(gtsam::assert_equal(H1, H1e, 1e-2));
+  EXPECT(gtsam::assert_equal(H2, H2e, 1e-2));
+  EXPECT(gtsam::assert_equal(H3, H3e, 1e-2));
+  EXPECT(gtsam::assert_equal(H4, H4e, 1e-2));
 
 }
 

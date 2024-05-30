@@ -78,17 +78,16 @@ using gtsam::symbol_shorthand::M;  // integer ddambiguities
 using gtsam::symbol_shorthand::A;  // acceleration
 using gtsam::symbol_shorthand::O;
 
-namespace gnss_fgo
-{
-  class GNSSFGOTimeCentricUrbanLocoNode : public GNSSFGOLocalizationBase
-  {
+namespace gnss_fgo {
+  class GNSSFGOTimeCentricUrbanLocoNode : public GNSSFGOLocalizationBase {
   protected:
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr SPANNavFixPub_;
     rclcpp::Subscription<novatel_oem7_msgs::msg::INSPVAX>::SharedPtr subPVA_;
 
   protected:
     void onINSPVAXMsgCb(novatel_oem7_msgs::msg::INSPVAX::ConstSharedPtr pva);
-    void calculateErrorOnState(const fgo::data_types::State& state) override;
+
+    void calculateErrorOnState(const fgo::data::State &state) override;
 
   public:
     explicit GNSSFGOTimeCentricUrbanLocoNode(const rclcpp::NodeOptions &opt);

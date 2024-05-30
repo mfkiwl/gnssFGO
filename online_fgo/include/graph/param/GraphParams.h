@@ -21,93 +21,91 @@
 #define ONLINE_FGO_GRAPHPARAMS_H
 
 #pragma once
+
 #include <string>
 #include <gtsam/geometry/Pose3.h>
 
 #include "gnss_fgo/param/GNSSFGOParams.h"
 #include "data/DataTypes.h"
-#include "data/FactorTypes.h"
+#include "include/factor/FactorTypes.h"
 
 
-namespace fgo::graph
-{
-    using namespace fgo::data_types;
-    enum OptimizationStrategy
-    {
-        ONIMU   =  0,
-        ONGNSS  =  1
-    };
+namespace fgo::graph {
+  using namespace fgo::data;
+  enum OptimizationStrategy {
+    ONIMU = 0,
+    ONGNSS = 1
+  };
 
-    enum SmootherType
-    {
-        ISAM2 = 0,
-        Batch = 1,
-        ISAM2FixedLag = 2,
-        BatchFixedLag = 3
-    };
+  enum SmootherType {
+    ISAM2 = 0,
+    Batch = 1,
+    ISAM2FixedLag = 2,
+    BatchFixedLag = 3
+  };
 
-    struct GraphParamBase : gnss_fgo::GNSSFGOParams
-    {
-        // Graph
-        double smootherLag = 0.1; // d
-        SmootherType smootherType = SmootherType::ISAM2FixedLag;
+  struct GraphParamBase : gnss_fgo::GNSSFGOParams {
+    // Graph
+    double smootherLag = 0.1; // d
+    SmootherType smootherType = SmootherType::ISAM2FixedLag;
 
-        // measurement model
-        //double QcGPInterpolator = 0.5;
-        gtsam::Vector6 QcGPInterpolatorFull;
-        //double QcGPMotionPrior = 0.5;
-        gtsam::Vector6 QcGPMotionPriorFull;
-        bool publishResiduals = true;
-        bool onlyLastResiduals = true;
-        bool AutoDiffNormalFactor = true;
-        bool AutoDiffGPInterpolatedFactor = true;
-        bool AutoDiffGPMotionPriorFactor = true;
-        bool GPInterpolatedFactorCalcJacobian = true;
+    // measurement model
+    bool addConstantAccelerationFactor = false;
+    gtsam::Vector6 QcGPInterpolatorFull;
+    gtsam::Vector6 QcGPMotionPriorFull;
+    bool publishResiduals = true;
+    bool publishResidualsOnline = true;
+    std::vector<uint64_t> skippedFactorsForResiduals;
+    bool onlyLastResiduals = true;
+    bool AutoDiffNormalFactor = true;
+    bool AutoDiffGPInterpolatedFactor = true;
+    bool AutoDiffGPMotionPriorFactor = true;
+    bool GPInterpolatedFactorCalcJacobian = true;
 
-        bool useEstimatedVarianceAfterInit = true;
-        bool useConstDriftFactor = false;
-        data_types::NoiseModel noiseModelClockFactor = data_types::NoiseModel::GAUSSIAN;
-        double robustParamClockFactor = 0.5;
-        double constDriftStd = 1;
-        double constBiasStd = 1;
-        double angularRateStd = 1;
-        double motionModelStd = 1;
-        gtsam::Vector3 magnetometerStd = gtsam::Vector3(0.01,0.01,0.01);
+    bool useEstimatedVarianceAfterInit = true;
+    bool addConstDriftFactor = false;
+    data::NoiseModel noiseModelClockFactor = data::NoiseModel::GAUSSIAN;
+    double robustParamClockFactor = 0.5;
+    double constDriftStd = 1;
+    double constBiasStd = 1;
+    double angularRateStd = 1;
+    double motionModelStd = 1;
+    gtsam::Vector3 magnetometerStd = gtsam::Vector3(0.01, 0.01, 0.01);
 
-        double IMUSensorSyncTimeThreshold = 0.005;
-        double StateMeasSyncUpperBound = 0.03;
-        double StateMeasSyncLowerBound = -0.03;
-        bool NoOptimizationWhileNoMeasurement = false;
-        bool NoOptimizationNearZeroVelocity = true;
-        double VoteNearZeroVelocity = 0.1;
-        int NoOptimizationAfterStates = 500;
+    double IMUSensorSyncTimeThreshold = 0.005;
+    double StateMeasSyncUpperBound = 0.03;
+    double StateMeasSyncLowerBound = -0.03;
+    bool NoOptimizationWhileNoMeasurement = false;
+    bool NoOptimizationNearZeroVelocity = true;
+    double VoteNearZeroVelocity = 0.1;
+    int NoOptimizationAfterStates = 500;
 
-        GraphParamBase() = default;
-        explicit GraphParamBase(const gnss_fgo::GNSSFGOParamsPtr& baseParamPtr) : gnss_fgo::GNSSFGOParams(*baseParamPtr) {};
-    };
-    typedef std::shared_ptr<GraphParamBase> GraphParamBasePtr;
+    GraphParamBase() = default;
 
-    struct GraphTimeCentricParam : GraphParamBase
-    {
-        bool useMMFactor = false;
-        //estimation
-        GraphTimeCentricParam() = default;
+    explicit GraphParamBase(const gnss_fgo::GNSSFGOParamsPtr &baseParamPtr) : gnss_fgo::GNSSFGOParams(*baseParamPtr) {};
+  };
 
-        explicit GraphTimeCentricParam(const GraphParamBasePtr& baseParamPtr) : GraphParamBase(*baseParamPtr){};
+  typedef std::shared_ptr<GraphParamBase> GraphParamBasePtr;
 
-    };
-    typedef std::shared_ptr<GraphTimeCentricParam> GraphTimeCentricParamPtr;
+  struct GraphTimeCentricParam : GraphParamBase {
+    bool addMMFactor = false;
 
-    struct GraphSensorCentricParam : GraphParamBase
-    {
-        bool useMMFactor = false;
-        //estimation
-        //GraphSensorCentricParam() = default;
-    };
-    typedef std::shared_ptr<GraphSensorCentricParam> GraphSensorCentricParamPtr;
+    //estimation
+    GraphTimeCentricParam() = default;
+
+    explicit GraphTimeCentricParam(const GraphParamBasePtr &baseParamPtr) : GraphParamBase(*baseParamPtr) {};
+
+  };
+
+  typedef std::shared_ptr<GraphTimeCentricParam> GraphTimeCentricParamPtr;
+
+  struct GraphSensorCentricParam : GraphParamBase {
+    bool useMMFactor = false;
+    //estimation
+    //GraphSensorCentricParam() = default;
+  };
+  typedef std::shared_ptr<GraphSensorCentricParam> GraphSensorCentricParamPtr;
 }
-
-
 
 
 #endif //ONLINE_FGO_GRAPHPARAMS_H

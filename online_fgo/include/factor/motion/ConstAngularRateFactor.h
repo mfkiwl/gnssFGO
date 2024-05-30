@@ -39,47 +39,49 @@ namespace fgo::factor {
 /**
  * 3-way angular rate factor, including pose and angular rate in reference ecef frame, imu bias.
  */
-    class ConstAngularRateFactor : public gtsam::NoiseModelFactor2<gtsam::Vector3, gtsam::imuBias::ConstantBias> {
+  class ConstAngularRateFactor : public gtsam::NoiseModelFactor2<gtsam::Vector3, gtsam::imuBias::ConstantBias> {
 
-    private:
-      gtsam::Vector3 angularRate_;
-      typedef ConstAngularRateFactor This;
-      typedef gtsam::NoiseModelFactor2<gtsam::Vector3, gtsam::imuBias::ConstantBias> Base;
+  private:
+    gtsam::Vector3 angularRate_;
+    bool useAutoDiff_ = true;
+    typedef ConstAngularRateFactor This;
+    typedef gtsam::NoiseModelFactor2<gtsam::Vector3, gtsam::imuBias::ConstantBias> Base;
 
-    public:
+  public:
 
-      ConstAngularRateFactor() = default;  /* Default constructor */
+    ConstAngularRateFactor() = default;  /* Default constructor */
 
-      /**
-       * @param betweenMeasured odometry measurement [dx dy dtheta] in body frame
-       */
-      ConstAngularRateFactor(gtsam::Key omega_i, gtsam::Key bias_i,
-                             const gtsam::Vector3 &angularRate, const gtsam::SharedNoiseModel &model) :
-              Base(model, omega_i, bias_i), angularRate_(angularRate) {
-        factorTypeID_ = FactorTypeIDs::ConstAngularVelocity;
-        factorName_ = "ConstAngularRateFactor";
-      }
+    /**
+     * @param betweenMeasured odometry measurement [dx dy dtheta] in body frame
+     */
+    ConstAngularRateFactor(gtsam::Key omega_i, gtsam::Key bias_i,
+                           const gtsam::Vector3 &angularRate,
+                           const gtsam::SharedNoiseModel &model, bool useAutoDiff = true) :
+      Base(model, omega_i, bias_i), angularRate_(angularRate), useAutoDiff_(useAutoDiff) {
+      factorTypeID_ = FactorTypeID::ConstAngularVelocity;
+      factorName_ = "ConstAngularRateFactor";
+    }
 
-      ~ConstAngularRateFactor() override = default;
+    ~ConstAngularRateFactor() override = default;
 
-      /// @return a deep copy of this factor
-      [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
-        return boost::static_pointer_cast<gtsam::NonlinearFactor>(
-                gtsam::NonlinearFactor::shared_ptr(new This(*this)));
-      }
+    /// @return a deep copy of this factor
+    [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
+      return boost::static_pointer_cast<gtsam::NonlinearFactor>(
+        gtsam::NonlinearFactor::shared_ptr(new This(*this)));
+    }
 
-      [[nodiscard]] gtsam::Vector evaluateError(const gtsam::Vector3 &omega, const gtsam::imuBias::ConstantBias &bias,
-                                  boost::optional<gtsam::Matrix &> H1 = boost::none,
-                                  boost::optional<gtsam::Matrix &> H2 = boost::none) const override {
-#if AUTO_DIFF
+    [[nodiscard]] gtsam::Vector evaluateError(const gtsam::Vector3 &omega, const gtsam::imuBias::ConstantBias &bias,
+                                              boost::optional<gtsam::Matrix &> H1 = boost::none,
+                                              boost::optional<gtsam::Matrix &> H2 = boost::none) const override {
+      if (useAutoDiff_) {
         if (H1)
-          *H1 = gtsam::numericalDerivative11<gtsam::Vector3,gtsam::Vector3>(
-                  boost::bind(&This::evaluateError_, this, boost::placeholders::_1, bias), omega);
+          *H1 = gtsam::numericalDerivative11<gtsam::Vector3, gtsam::Vector3>(
+            boost::bind(&This::evaluateError_, this, boost::placeholders::_1, bias), omega);
         if (H2)
-          *H2 = gtsam::numericalDerivative11<gtsam::Vector3,gtsam::imuBias::ConstantBias>(
-                  boost::bind(&This::evaluateError_, this, omega, boost::placeholders::_1), bias);
+          *H2 = gtsam::numericalDerivative11<gtsam::Vector3, gtsam::imuBias::ConstantBias>(
+            boost::bind(&This::evaluateError_, this, omega, boost::placeholders::_1), bias);
         return evaluateError_(omega, bias);
-#else
+      } else {
         gtsam::Vector3 err;
         gtsam::Matrix36 Hbias;
         if (H2) {
@@ -90,51 +92,76 @@ namespace fgo::factor {
         }
         if (H1) *H1 = gtsam::I_3x3;
         return err;
-#endif
       }
+    }
 
-      [[nodiscard]] gtsam::Vector3 evaluateError_(const gtsam::Vector3 &omega, const gtsam::imuBias::ConstantBias &bias) const {
-        return omega - bias.correctGyroscope(angularRate_);
+    [[nodiscard]] gtsam::Vector3
+    evaluateError_(const gtsam::Vector3 &omega, const gtsam::imuBias::ConstantBias &bias) const {
+      return omega - bias.correctGyroscope(angularRate_);
+    }
+
+    /** lifting all related state values in a vector after the ordering for evaluateError **/
+    gtsam::Vector liftValuesAsVector(const gtsam::Values &values) override {
+      const auto gyro = values.at<gtsam::Vector3>(key1());
+      const auto bias = values.at<gtsam::imuBias::ConstantBias>(key2());
+
+      const auto liftedStates = (gtsam::Vector(9) << gyro, bias.vector()).finished();
+      return liftedStates;
+    }
+
+    gtsam::Values generateValuesFromStateVector(const gtsam::Vector &state) override {
+      assert(state.size() != 9);
+      gtsam::Values values;
+      try {
+        values.insert(key1(), gtsam::Vector3(state.block<3, 1>(0, 0)));
+        values.insert(key2(), gtsam::imuBias::ConstantBias(state.block<6, 1>(3, 0)));
       }
-
-      /** return the measured */
-      [[nodiscard]] const gtsam::Vector3 &measured() const {
-        return angularRate_;
+      catch (std::exception &ex) {
+        std::cout << "Factor " << getName() << " cannot generate values from state vector " << state << " due to "
+                  << ex.what() << std::endl;
       }
+      return values;
+    }
 
-      /** equals specialized to this factor */
-      [[nodiscard]] bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
-        const This *e = dynamic_cast<const This *> (&expected);
-        return e != nullptr && Base::equals(*e, tol)
-               && gtsam::equal_with_abs_tol((gtsam::Vector3() << this->angularRate_).finished(),
-                                            (gtsam::Vector3() << e->angularRate_).finished(), tol);
-      }
+    /** return the measured */
+    [[nodiscard]] const gtsam::Vector3 &measured() const {
+      return angularRate_;
+    }
 
-      /** print contents */
-      void print(const std::string &s = "",
-                 const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
-        std::cout << s << "ConstAngularRateFactor" << std::endl;
-        Base::print("", keyFormatter);
-      }
+    /** equals specialized to this factor */
+    [[nodiscard]] bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
+      const This *e = dynamic_cast<const This *> (&expected);
+      return e != nullptr && Base::equals(*e, tol)
+             && gtsam::equal_with_abs_tol((gtsam::Vector3() << this->angularRate_).finished(),
+                                          (gtsam::Vector3() << e->angularRate_).finished(), tol);
+    }
 
-    private:
+    /** print contents */
+    void print(const std::string &s = "",
+               const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
+      std::cout << s << "ConstAngularRateFactor" << std::endl;
+      Base::print("", keyFormatter);
+    }
 
-      /** Serialization function */
-      friend class boost::serialization::access;
+  private:
 
-      template<class ARCHIVE>
-      void serialize(ARCHIVE &ar, const unsigned int version) {
-        ar & boost::serialization::make_nvp("NoiseModelFactor2",
-                                            boost::serialization::base_object<Base>(*this));
-        ar & BOOST_SERIALIZATION_NVP(angularRate_);
-      }
-    }; // PrDrFactor
-  } // namespace fgonav
+    /** Serialization function */
+    friend class boost::serialization::access;
+
+    template<class ARCHIVE>
+    void serialize(ARCHIVE &ar, const unsigned int version) {
+      ar & boost::serialization::make_nvp("NoiseModelFactor2",
+                                          boost::serialization::base_object<Base>(*this));
+      ar & BOOST_SERIALIZATION_NVP(angularRate_);
+    }
+  }; // PrDrFactor
+} // namespace fgonav
 
 /// traits
 namespace gtsam {
-    template<>
-    struct traits<fgo::factor::ConstAngularRateFactor> : public Testable<fgo::factor::ConstAngularRateFactor> {};
+  template<>
+  struct traits<fgo::factor::ConstAngularRateFactor> : public Testable<fgo::factor::ConstAngularRateFactor> {
+  };
 }
 
 #endif //FGONAV_ARGULARRATEFACTOR_H

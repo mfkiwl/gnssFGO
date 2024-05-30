@@ -24,108 +24,102 @@
 #include <irt_nav_msgs/msg/correvit_vel_angle.hpp>
 
 #include "IntegratorBase.h"
-#include "factor/measurement/odometry/NavVelocityFactor.h"
-#include "factor/measurement/odometry/GPInterpolatedNavVelocityFactor.h"
+#include "factor/odometry/NavVelocityFactor.h"
+#include "factor/odometry/GPInterpolatedNavVelocityFactor.h"
 #include "factor/motion/VelocityPreintegration.h"
-#include "factor/measurement/odometry/PreintegratedVelocityFactor.h"
-#include "factor/measurement/odometry/GPInterpolatedPreintegratedVelocityFactor.h"
 
-namespace fgo::integrator
-{
-    struct CorrevitVelAngle
-    {
-        double timestamp{};
-        double angle{};
-        double vel{};
-        double vel_x{};
-        double vel_y{};
-        double delay = 0.;
-    };
+//#include "factor/odometry/GPInterpolatedPreintegratedVelocityFactor.h"
 
-    struct Correvit
-    {
-        double timestamp{};
-        double angle_correvit{};
-        double vel_x_correvit{};
-        double vel_correvit{};
-        double vel_y_correvit{};
-        double delay = 0.;
-    };
+namespace fgo::integrator {
+  struct CorrevitVelAngle {
+    double timestamp{};
+    double angle{};
+    double vel{};
+    double vel_x{};
+    double vel_y{};
+    double delay = 0.;
+  };
 
-    struct CorrevitPitchRoll
-    {
-        double timestamp{};
-        double pitch{};
-        double radius{};
-        double roll{};
-        double delay = 0.;
-    };
+  struct Correvit {
+    double timestamp{};
+    double angle_correvit{};
+    double vel_x_correvit{};
+    double vel_correvit{};
+    double vel_y_correvit{};
+    double delay = 0.;
+  };
 
-    class CorrevitIntegrator : public IntegratorBase
-    {
-    protected:
-        rclcpp::Subscription<irt_nav_msgs::msg::CorrevitVelAngle>::SharedPtr subCorrevitVelAngle_;
-        rclcpp::Subscription<irt_nav_msgs::msg::Correvit>::SharedPtr subCorrevit_;
-        rclcpp::Subscription<irt_nav_msgs::msg::CorrevitPitchRoll>::SharedPtr subCorrevitPitchRoll_;
+  struct CorrevitPitchRoll {
+    double timestamp{};
+    double pitch{};
+    double radius{};
+    double roll{};
+    double delay = 0.;
+  };
 
-        fgo::buffer::CircularDataBuffer<CorrevitVelAngle> bufferCorrevitVelAngle_;
-        fgo::buffer::CircularDataBuffer<Correvit> bufferCorrevit_;
-        fgo::buffer::CircularDataBuffer<CorrevitPitchRoll> bufferCorrevitPitchRoll_;
+  class CorrevitIntegrator : public IntegratorBase {
+  protected:
+    rclcpp::Subscription<irt_nav_msgs::msg::CorrevitVelAngle>::SharedPtr subCorrevitVelAngle_;
+    rclcpp::Subscription<irt_nav_msgs::msg::Correvit>::SharedPtr subCorrevit_;
+    rclcpp::Subscription<irt_nav_msgs::msg::CorrevitPitchRoll>::SharedPtr subCorrevitPitchRoll_;
 
-        IntegratorCorrevitParamsPtr paramPtr_;
-        std::shared_ptr<fgo::models::GPInterpolator> interpolator_;
-        std::shared_ptr<fgo::factor::VelocityPreintegrationParams> preIntergratorParams_;
+    fgo::data::CircularDataBuffer<CorrevitVelAngle> bufferCorrevitVelAngle_;
+    fgo::data::CircularDataBuffer<Correvit> bufferCorrevit_;
+    fgo::data::CircularDataBuffer<CorrevitPitchRoll> bufferCorrevitPitchRoll_;
 
-        std::atomic_bool zeroVelocity_ = false;
+    IntegratorCorrevitParamsPtr paramPtr_;
+    std::shared_ptr<fgo::models::GPInterpolator> interpolator_;
+    std::shared_ptr<fgo::factor::VelocityPreintegrationParams> preIntergratorParams_;
+
+    std::atomic_bool zeroVelocity_ = false;
 
 
-    public:
-        explicit CorrevitIntegrator() = default;
-        ~CorrevitIntegrator() override = default;
+  public:
+    explicit CorrevitIntegrator() = default;
 
-        void initialize(rclcpp::Node& node,
-                        fgo::graph::GraphBase& graphPtr,
-                        const std::string& integratorName,
-                        bool isPrimarySensor = false) override;
+    ~CorrevitIntegrator() override = default;
 
-        bool factorize(
-            const boost::circular_buffer<std::pair<double, gtsam::Vector3>>& timestampGyroMap,
-            const boost::circular_buffer<std::pair<size_t, gtsam::Vector6>>& stateIDAccMap,
-            const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap& currentKeyIndexTimestampMap,
-            std::vector<std::pair<rclcpp::Time, fgo::data_types::State>>& timePredStates,
-            gtsam::Values& values,
-            fgo::solvers::FixedLagSmoother::KeyTimestampMap& keyTimestampMap,
-            gtsam::KeyVector& relatedKeys
-        ) override;
+    void initialize(rclcpp::Node &node,
+                    fgo::graph::GraphBase &graphPtr,
+                    const std::string &integratorName,
+                    bool isPrimarySensor = false) override;
 
-        bool fetchResult(
-            const gtsam::Values& result,
-            const gtsam::Marginals& martinals,
-            const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap& keyIndexTimestampMap,
-            fgo::data_types::State& optState
-        ) override;
+    bool addFactors(
+      const boost::circular_buffer<std::pair<double, gtsam::Vector3>> &timestampGyroMap,
+      const boost::circular_buffer<std::pair<size_t, gtsam::Vector6>> &stateIDAccMap,
+      const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap &currentKeyIndexTimestampMap,
+      std::vector<std::pair<rclcpp::Time, fgo::data::State>> &timePredStates,
+      gtsam::Values &values,
+      fgo::solvers::FixedLagSmoother::KeyTimestampMap &keyTimestampMap,
+      gtsam::KeyVector &relatedKeys
+    ) override;
 
-        void dropMeasurementBefore(double timestamp) override{
-          bufferCorrevitVelAngle_.cleanBeforeTime(timestamp);
-          bufferCorrevit_.cleanBeforeTime(timestamp);
-          bufferCorrevitPitchRoll_.cleanBeforeTime(timestamp);
-        }
+    bool fetchResult(
+      const gtsam::Values &result,
+      const gtsam::Marginals &martinals,
+      const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap &keyIndexTimestampMap,
+      fgo::data::State &optState
+    ) override;
 
-        bool checkZeroVelocity() override{
-          return zeroVelocity_;
-        }
+    void dropMeasurementBefore(double timestamp) override {
+      bufferCorrevitVelAngle_.cleanBeforeTime(timestamp);
+      bufferCorrevit_.cleanBeforeTime(timestamp);
+      bufferCorrevitPitchRoll_.cleanBeforeTime(timestamp);
+    }
 
-        bool checkHasMeasurements() override
-        {
-          return bufferCorrevit_.size() != 0;
-        }
+    bool checkZeroVelocity() override {
+      return zeroVelocity_;
+    }
 
-        void cleanBuffers() override
-        {
-          bufferCorrevit_.clean();
-        }
+    bool checkHasMeasurements() override {
+      return bufferCorrevit_.size() != 0;
+    }
+
+    void cleanBuffers() override {
+      bufferCorrevit_.clean();
+    }
 
 
-    };
+  };
 }
 #endif //ONLINE_FGO_CORREVITINTEGRATOR_H

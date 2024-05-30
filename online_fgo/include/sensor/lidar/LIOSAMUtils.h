@@ -61,7 +61,7 @@
 struct PointXYZIRPYT
 {
     PCL_ADD_POINT4D
-    PCL_ADD_INTENSITY;                  // preferred way of adding a XYZ+padding
+    PCL_ADD_INTENSITY                  // preferred way of adding a XYZ+padding
     float roll;
     float pitch;
     float yaw;
@@ -183,7 +183,7 @@ namespace sensors::LiDAR::LIOSAM
       pcl::getTransformation(transformIn->x, transformIn->y, transformIn->z, transformIn->roll, transformIn->pitch, transformIn->yaw, transCur);
 
       #pragma omp parallel for num_threads(4)
-      for (int i = 0; i < cloudSize; ++i)
+      for (size_t i = 0; i < cloudSize; ++i)
       {
         const auto &pointFrom = cloudIn->points[i];
         cloudOut->points[i].x = transCur(0,0) * pointFrom.x + transCur(0,1) * pointFrom.y + transCur(0,2) * pointFrom.z + transCur(0,3);

@@ -1,0 +1,19 @@
+---
+/offline_fgo/learning_gp:
+  ros__parameters:
+    use_sim_time: true
+    Boreas:
+      bagPath: "/mnt/DataSmall/Boreas/ros2bag_boreas-2020-11-26-13-58/ros2bag_boreas-2020-11-26-13-58_0.db3"
+      maxMemoryFootprint: 4.
+      fullyLoadedTopics: [ "/boreas/gps_gt", "/boreas/gps_raw", "/boreas/imu/data" ]
+      autoLoading: True
+      startOffset: 0.
+      preDefinedDuration: 0.
+
+    DELoco:
+      bagPath: "/mnt/SSDSmall/Boreas/ros2bag_boreas-2020-11-26-13-58"
+      maxMemoryFootprint: 4.
+      fullyLoadedTopics: [ "/imu/data", ]
+      autoLoading: True
+      startOffset: 0.
+      preDefinedDuration: 0.

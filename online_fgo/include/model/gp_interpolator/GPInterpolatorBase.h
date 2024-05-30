@@ -20,13 +20,22 @@
 #define ONLINE_FGO_GPINTERPOLATORBASE_H
 
 #pragma once
-#include <iostream>
 
-namespace fgo::models{
+#include <iostream>
+#include <gtsam/geometry/Pose3.h>
+#include <gtsam/base/Matrix.h>
+#include <gtsam/base/numericalDerivative.h>
+
+#include "utils/NavigationTools.h"
+#include "utils/Pose3Utils.h"
+#include "utils/GPUtils.h"
+
+namespace fgo::models {
 
   class GPInterpolator {
   protected:
     gtsam::Matrix6 Qc_;
+    gtsam::Matrix6 Ad_;
     double delta_t_{};
     double tau_{};
 
@@ -35,18 +44,43 @@ namespace fgo::models{
 
     GPInterpolator() = default;
 
-    explicit GPInterpolator(const gtsam::Matrix6 &Qc, double delta_t = 0.0, double tau = 0.0, bool useAutoDiff = false, bool calcJacobian = true) {
-      Qc_ = Qc; delta_t_ = delta_t; tau_ = tau; useAutoDiff_ = useAutoDiff; calcJacobian_ = calcJacobian;
+    //for WNOA and WNOJ
+    explicit GPInterpolator(const gtsam::Matrix6 &Qc, double delta_t = 0.0, double tau = 0.0, bool useAutoDiff = false,
+                            bool calcJacobian = true) {
+      Qc_ = Qc;
+      delta_t_ = delta_t;
+      tau_ = tau;
+      useAutoDiff_ = useAutoDiff;
+      calcJacobian_ = calcJacobian;
+    }
+
+    //for Singer
+    explicit GPInterpolator(const gtsam::Matrix6 &Qc, const gtsam::Matrix6 &Ad, double delta_t = 0.0, double tau = 0.0,
+                            bool useAutoDiff = false, bool calcJacobian = true) {
+      Qc_ = Qc;
+      Ad_ = Ad;
+      delta_t_ = delta_t;
+      tau_ = tau;
+      useAutoDiff_ = useAutoDiff;
+      calcJacobian_ = calcJacobian;
     }
 
     virtual ~GPInterpolator() = default;
 
     void update(double delta_t, double tau) {
-      tau_ = tau; delta_t_ = delta_t;
+      tau_ = tau;
+      delta_t_ = delta_t;
     }
+
+    void update(double delta_t, double tau, const gtsam::Matrix66 &Ad) {
+      tau_ = tau;
+      delta_t_ = delta_t;
+      Ad_ = Ad;
+    }
+
   public:
 
-      [[nodiscard]] virtual double getTau() const {
+    [[nodiscard]] virtual double getTau() const {
       return tau_;
     }
 
@@ -58,33 +92,109 @@ namespace fgo::models{
       return Qc_;
     }
 
+    [[nodiscard]] gtsam::Matrix6 getAd() const {
+      return Ad_;
+    }
+
     virtual void recalculate(const double &delta_t, const double &tau,
-                             const gtsam::Vector6 &accI = gtsam::Vector6(), const gtsam::Vector6 &accJ = gtsam::Vector6()) = 0;
+                             const gtsam::Vector6 &accI = gtsam::Vector6(),
+                             const gtsam::Vector6 &accJ = gtsam::Vector6()) {};
 
-    virtual gtsam::Pose3 interpolatePose(const gtsam::Pose3& pose1, const gtsam::Vector3& v1_n, const gtsam::Vector3& omega1_b,
-                                         const gtsam::Pose3& pose2, const gtsam::Vector3& v2_n, const gtsam::Vector3& omega2_b,
-                                         boost::optional<gtsam::Matrix &> H1 = boost::none,
-                                         boost::optional<gtsam::Matrix &> H2 = boost::none,
-                                         boost::optional<gtsam::Matrix &> H3 = boost::none,
-                                         boost::optional<gtsam::Matrix &> H4 = boost::none,
-                                         boost::optional<gtsam::Matrix &> H5 = boost::none,
-                                         boost::optional<gtsam::Matrix &> H6 = boost::none) const {};
+    virtual void recalculate(const double &delta_t, const double &tau, const gtsam::Matrix66 &Ad,
+                             const gtsam::Vector6 &accI = gtsam::Vector6(),
+                             const gtsam::Vector6 &accJ = gtsam::Vector6()) {};
+
+    virtual gtsam::Pose3
+    interpolatePose(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                    const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                    boost::optional<gtsam::Matrix &> H1 = boost::none,
+                    boost::optional<gtsam::Matrix &> H2 = boost::none,
+                    boost::optional<gtsam::Matrix &> H3 = boost::none,
+                    boost::optional<gtsam::Matrix &> H4 = boost::none,
+                    boost::optional<gtsam::Matrix &> H5 = boost::none,
+                    boost::optional<gtsam::Matrix &> H6 = boost::none) const {};
+
+    virtual gtsam::Pose3
+    interpolatePose(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                    const gtsam::Vector6 &acc1,
+                    const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                    const gtsam::Vector6 &acc2,
+                    boost::optional<gtsam::Matrix &> H1 = boost::none,
+                    boost::optional<gtsam::Matrix &> H2 = boost::none,
+                    boost::optional<gtsam::Matrix &> H3 = boost::none,
+                    boost::optional<gtsam::Matrix &> H4 = boost::none,
+                    boost::optional<gtsam::Matrix &> H5 = boost::none,
+                    boost::optional<gtsam::Matrix &> H6 = boost::none,
+                    boost::optional<gtsam::Matrix &> H7 = boost::none,
+                    boost::optional<gtsam::Matrix &> H8 = boost::none) const {};
 
 
-    virtual gtsam::Pose3 interpolatePose_(const gtsam::Pose3& pose1, const gtsam::Vector3& v1_n, const gtsam::Vector3& omega1_b,
-                                          const gtsam::Pose3& pose2, const gtsam::Vector3& v2_n, const gtsam::Vector3& omega2_b) const {};
+    virtual gtsam::Pose3
+    interpolatePose_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                     const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b) const {};
 
-    virtual gtsam::Vector6 interpolateVelocity(const gtsam::Pose3& pose1, const gtsam::Vector3& v1_n, const gtsam::Vector3& omega1_b,
-                                               const gtsam::Pose3& pose2, const gtsam::Vector3& v2_n, const gtsam::Vector3& omega2_b,
-                                               boost::optional<gtsam::Matrix &> H1 = boost::none,
-                                               boost::optional<gtsam::Matrix &> H2 = boost::none,
-                                               boost::optional<gtsam::Matrix &> H3 = boost::none,
-                                               boost::optional<gtsam::Matrix &> H4 = boost::none,
-                                               boost::optional<gtsam::Matrix &> H5 = boost::none,
-                                               boost::optional<gtsam::Matrix &> H6 = boost::none) const {};
+    virtual gtsam::Pose3
+    interpolatePose_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                     const gtsam::Vector6 &acc1,
+                     const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                     const gtsam::Vector6 &acc2) const {};
 
-    virtual gtsam::Vector6 interpolateVelocity_(const gtsam::Pose3& pose1, const gtsam::Vector3& v1_n, const gtsam::Vector3& omega1_b,
-                                                const gtsam::Pose3& pose2, const gtsam::Vector3& v2_n, const gtsam::Vector3& omega2_b) const {};
+    virtual gtsam::Vector6
+    interpolateVelocity(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                        const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                        boost::optional<gtsam::Matrix &> H1 = boost::none,
+                        boost::optional<gtsam::Matrix &> H2 = boost::none,
+                        boost::optional<gtsam::Matrix &> H3 = boost::none,
+                        boost::optional<gtsam::Matrix &> H4 = boost::none,
+                        boost::optional<gtsam::Matrix &> H5 = boost::none,
+                        boost::optional<gtsam::Matrix &> H6 = boost::none) const {};
+
+    virtual gtsam::Vector6
+    interpolateVelocity_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                         const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n,
+                         const gtsam::Vector3 &omega2_b) const {};
+
+    virtual gtsam::Vector6
+    interpolateVelocity(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                        const gtsam::Vector6 &acc1,
+                        const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                        const gtsam::Vector6 &acc2,
+                        boost::optional<gtsam::Matrix &> H1 = boost::none,
+                        boost::optional<gtsam::Matrix &> H2 = boost::none,
+                        boost::optional<gtsam::Matrix &> H3 = boost::none,
+                        boost::optional<gtsam::Matrix &> H4 = boost::none,
+                        boost::optional<gtsam::Matrix &> H5 = boost::none,
+                        boost::optional<gtsam::Matrix &> H6 = boost::none,
+                        boost::optional<gtsam::Matrix &> H7 = boost::none,
+                        boost::optional<gtsam::Matrix &> H8 = boost::none) const {};
+
+    virtual gtsam::Vector6
+    interpolateVelocity_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                         const gtsam::Vector6 &acc1,
+                         const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                         const gtsam::Vector6 &acc2) const {};
+
+
+    virtual gtsam::Vector6
+    interpolateAcceleration(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                            const gtsam::Vector6 &acc1,
+                            const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                            const gtsam::Vector6 &acc2,
+                            boost::optional<gtsam::Matrix &> H1 = boost::none,
+                            boost::optional<gtsam::Matrix &> H2 = boost::none,
+                            boost::optional<gtsam::Matrix &> H3 = boost::none,
+                            boost::optional<gtsam::Matrix &> H4 = boost::none,
+                            boost::optional<gtsam::Matrix &> H5 = boost::none,
+                            boost::optional<gtsam::Matrix &> H6 = boost::none,
+                            boost::optional<gtsam::Matrix &> H7 = boost::none,
+                            boost::optional<gtsam::Matrix &> H8 = boost::none) const {};
+
+    virtual gtsam::Vector6
+    interpolateAcceleration_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
+                             const gtsam::Vector6 &acc1,
+                             const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
+                             const gtsam::Vector6 &acc2) const {};
+
 
     virtual void print(const std::string &s = "GPIntegratorBase") const = 0;
 

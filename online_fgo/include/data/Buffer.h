@@ -13,7 +13,7 @@
 #include <boost/circular_buffer.hpp>
 
 
-namespace fgo::buffer {
+namespace fgo::data {
   typedef const std::lock_guard<std::mutex> ExecutiveMutexLock;
 
   template<typename BufferType>
@@ -31,15 +31,12 @@ namespace fgo::buffer {
       clean_();
     };
 
-    void cleanBeforeTime(const double& time)
-    {
+    void cleanBeforeTime(const double &time) {
       ExecutiveMutexLock lock(mutex_);
       auto timeIter = time_buffer.begin();
       auto bufferIter = buffer.begin();
-      while(timeIter != time_buffer.end())
-      {
-        if(timeIter->seconds() <= time)
-        {
+      while (timeIter != time_buffer.end()) {
+        if (timeIter->seconds() <= time) {
           timeIter = time_buffer.erase(timeIter);
           bufferIter = buffer.erase(bufferIter);
           continue;
@@ -66,7 +63,8 @@ namespace fgo::buffer {
       buffer_size = new_size;
     }
 
-    void update_buffer(BufferType new_buffer, const rclcpp::Time &t_msg, const rclcpp::Time &t_now = rclcpp::Time(0, 0, RCL_ROS_TIME)) {
+    void update_buffer(BufferType new_buffer, const rclcpp::Time &t_msg,
+                       const rclcpp::Time &t_now = rclcpp::Time(0, 0, RCL_ROS_TIME)) {
       if (mutex_.try_lock()) {
         check_temp_buffer();
         buffer.push_back(new_buffer);
@@ -100,13 +98,12 @@ namespace fgo::buffer {
     }
 
     BufferType get_first_buffer() {
-        ExecutiveMutexLock lock(mutex_);
-        // check_temp_buffer();
-        return buffer.front();
-      }
+      ExecutiveMutexLock lock(mutex_);
+      // check_temp_buffer();
+      return buffer.front();
+    }
 
-    BufferType get_first_buffer_and_pop()
-    {
+    BufferType get_first_buffer_and_pop() {
       ExecutiveMutexLock lock(mutex_);
       auto data = buffer.front();
       buffer.pop_front();
@@ -115,8 +112,7 @@ namespace fgo::buffer {
       return data;
     }
 
-    std::tuple<BufferType, rclcpp::Time> get_first_buffer_time_pair_and_pop()
-    {
+    std::tuple<BufferType, rclcpp::Time> get_first_buffer_time_pair_and_pop() {
       ExecutiveMutexLock lock(mutex_);
       auto data = buffer.front();
       buffer.pop_front();
@@ -128,7 +124,7 @@ namespace fgo::buffer {
 
     BufferType get_last_buffer() {
       ExecutiveMutexLock lock(mutex_);
-     // check_temp_buffer();
+      // check_temp_buffer();
       return buffer.back();
     }
 
@@ -148,8 +144,7 @@ namespace fgo::buffer {
       ExecutiveMutexLock lock(mutex_);
       //check_temp_buffer();
 
-      if(buffer.empty())
-      {
+      if (buffer.empty()) {
         BufferType T;
         return T;
       }
@@ -161,74 +156,67 @@ namespace fgo::buffer {
 
       }
       std::sort(buffer_map.begin(), buffer_map.end(), [](std::pair<double, BufferType> &a,
-                                                        std::pair<double, BufferType> &b) {
-          return a.first > b.first;
+                                                         std::pair<double, BufferType> &b) {
+        return a.first > b.first;
       });
       return buffer_map.back().second;
     }
 
     BufferType get_buffer(const double &t) {
-        ExecutiveMutexLock lock(mutex_);
-        //check_temp_buffer();
+      ExecutiveMutexLock lock(mutex_);
+      //check_temp_buffer();
 
-        if(buffer.empty())
-        {
-          BufferType T;
-          return T;
-        }
-
-        std::vector<std::pair<double, BufferType>> buffer_map;
-
-        for (uint i = 0; i < buffer_size; i++) {
-          buffer_map.template emplace_back(std::make_pair(abs(t - time_buffer[i].seconds()), buffer[i]));
-
-        }
-        std::sort(buffer_map.begin(), buffer_map.end(), [](std::pair<double, BufferType> &a,
-                                                           std::pair<double, BufferType> &b) {
-            return a.first > b.first;
-        });
-        return buffer_map.back().second;
+      if (buffer.empty()) {
+        BufferType T;
+        return T;
       }
+
+      std::vector<std::pair<double, BufferType>> buffer_map;
+
+      for (uint i = 0; i < buffer_size; i++) {
+        buffer_map.template emplace_back(std::make_pair(abs(t - time_buffer[i].seconds()), buffer[i]));
+
+      }
+      std::sort(buffer_map.begin(), buffer_map.end(), [](std::pair<double, BufferType> &a,
+                                                         std::pair<double, BufferType> &b) {
+        return a.first > b.first;
+      });
+      return buffer_map.back().second;
+    }
 
     BufferType get_buffer_from_id(uint id) {
       ExecutiveMutexLock lock(mutex_);
       if (id > buffer.size()) {
-        std::cout << "Wrong Buffer ID: " << id << " last buffer is returned!" << std::endl;
+        std::cout << "Wrong Buffer ID: " << id << " last data is returned!" << std::endl;
         return buffer.back();
       }
-      try
-      {
+      try {
         return buffer.at(id);
       }
-      catch(std::exception& ex)
-      {
-        std::cout << "INVALID ID: " << id << " last buffer is returned!" << std::endl;
+      catch (std::exception &ex) {
+        std::cout << "INVALID ID: " << id << " last data is returned!" << std::endl;
         return buffer.back();
       }
     }
 
-    std::vector<std::pair<rclcpp::Time, BufferType>> get_all_time_buffer_pair()
-    {
+    std::vector<std::pair<rclcpp::Time, BufferType>> get_all_time_buffer_pair() {
       std::vector<std::pair<rclcpp::Time, BufferType>> pairs;
       ExecutiveMutexLock lock(mutex_);
-      for(size_t i = 0; i < buffer.size(); i++)
-      {
+      for (size_t i = 0; i < buffer.size(); i++) {
         pairs.template emplace_back(std::make_pair(time_buffer[i], buffer[i]));
       }
       return pairs;
     }
 
-      std::vector<std::pair<rclcpp::Time, BufferType>> get_all_time_buffer_pair_and_clean()
-      {
-        std::vector<std::pair<rclcpp::Time, BufferType>> pairs;
-        ExecutiveMutexLock lock(mutex_);
-        for(size_t i = 0; i < buffer.size(); i++)
-        {
-          pairs.template emplace_back(std::make_pair(time_buffer[i], buffer[i]));
-        }
-        clean_();
-        return pairs;
+    std::vector<std::pair<rclcpp::Time, BufferType>> get_all_time_buffer_pair_and_clean() {
+      std::vector<std::pair<rclcpp::Time, BufferType>> pairs;
+      ExecutiveMutexLock lock(mutex_);
+      for (size_t i = 0; i < buffer.size(); i++) {
+        pairs.template emplace_back(std::make_pair(time_buffer[i], buffer[i]));
       }
+      clean_();
+      return pairs;
+    }
 
     std::vector<BufferType> get_all_buffer() {
       std::vector<BufferType> buffers;

@@ -27,61 +27,39 @@
 #include "integrator/GNSSLCIntegrator.h"
 #include "integrator/LIOIntegrator.h"
 
-namespace fgo::graph
-{
-    class GraphSensorCentric : public GraphTimeCentric
-    {
-        GraphSensorCentricParamPtr paramPtr_;
+namespace fgo::graph {
+  // ToDo:
+  //              NOT FINISHED YET!
+  //************************************************
+  //************************************************
+  //************************************************
 
-    public:
-        typedef std::shared_ptr<GraphSensorCentric> Ptr;
+  class GraphSensorCentric : public GraphTimeCentric {
+    GraphSensorCentricParamPtr paramPtr_;
 
-        explicit GraphSensorCentric(gnss_fgo::GNSSFGOLocalizationBase& node);
+  public:
+    typedef std::shared_ptr<GraphSensorCentric> Ptr;
 
-        ~GraphSensorCentric() override
-        {
-            if(pubResidualsThread_)
-                pubResidualsThread_->join();
-        };
+    explicit GraphSensorCentric(gnss_fgo::GNSSFGOLocalizationBase &node);
 
-        StatusGraphConstruction constructFactorGraphOnIMU(
-                std::vector<fgo::data_types::IMUMeasurement>& dataIMU
-        ) override;
-
-        StatusGraphConstruction constructFactorGraphOnTime(
-                const std::vector<double>& stateTimestamps,
-                std::vector<fgo::data_types::IMUMeasurement> &dataIMU
-        ) override;
-
+    ~GraphSensorCentric() override {
+      if (pubResidualsThread_)
+        pubResidualsThread_->join();
     };
 
+    StatusGraphConstruction constructFactorGraphOnIMU(
+      std::vector<fgo::data::IMUMeasurement> &dataIMU
+    ) override;
+
+    StatusGraphConstruction constructFactorGraphOnTime(
+      const std::vector<double> &stateTimestamps,
+      std::vector<fgo::data::IMUMeasurement> &dataIMU
+    ) override;
+
+  };
 
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #endif //ONLINE_FGO_GRAPHGNSSCENTRIC_H
