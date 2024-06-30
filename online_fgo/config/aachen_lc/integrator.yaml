@@ -8,7 +8,7 @@
 
       IRTPVALCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
-        notIntegrating: true
+        notIntegrating: false
         useForInitialization: true
         useHeaderTimestamp: true
         GNSSMeasurementFrequency: 10
@@ -49,7 +49,7 @@
 
       UbloxLCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
-        notIntegrating: false
+        notIntegrating: true
         useForInitialization: false
         useHeaderTimestamp: true
         transIMUToGNSSAnt1: [ 0., 0., -0.04 ] # [0.0, 0.0, 0.0]
