@@ -29,7 +29,7 @@
 
       Graph:
         publishResiduals: false
-        addIMUFactor: false
+        addIMUFactor: true
         IMUMeasurementFrequency: 100  #
         addGPPriorFactor: true
         gpType: 'WNOJ'  # 'WNOA'
@@ -41,8 +41,8 @@
         AutoDiffGPMotionPriorFactor: false
         GPInterpolatedFactorCalcJacobian: true
 
-        StateMeasSyncUpperBound: 0.04
-        StateMeasSyncLowerBound: -0.04
+        StateMeasSyncUpperBound: 0.01
+        StateMeasSyncLowerBound: -0.01
         addMMFactor: false
         addConstDriftFactor: false
 
@@ -68,7 +68,7 @@
         rotIMUToLiDAR: [ 1., 0., 0., 0., -1., 0., 0., 0., -1. ]
         transIMUToCorrevit: [ -1.78, 0., 1.2 ]
 
-      Integrators: [ "IRTPVALCIntegrator", "UbloxLCIntegrator" ]   # ["UbloxLCIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]
+      Integrators: [ "IRTPVALCIntegrator", ]   # ["UbloxLCIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]
       #Integrators: ["IRTPVALCIntegrator"]   # ["UbloxIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]
 
       Optimizer:
