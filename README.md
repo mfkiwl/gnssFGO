@@ -1,5 +1,7 @@
 # gnssFGO: an online and time-centric factor graph optimization for GNSS/Multi-sensor vehicle localization
 
+## <span style="color:red">Currently, we are improving the project with more generalizations for e.g., sensor parameters and a docker image. Stay tuned.</span>.
+
 ### Video Demonstration (click the figure):
 [![IMAGE ALT TEXT](http://img.youtube.com/vi/9R55uCCrNss/0.jpg)](http://www.youtube.com/watch?v=9R55uCCrNss "GNSS-FGO Video Demonstration")
 
