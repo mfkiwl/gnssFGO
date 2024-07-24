@@ -46,7 +46,7 @@
 #include "sensor/SensorCalibrationManager.h"
 #include "DatasetParam.h"
 #include "BagReader.h"
-#include "data/BagUtils.h"
+#include "BagUtils.h"
 #include "utils/GNSSUtils.h"
 #include "utils/ROSUtils.h"
 

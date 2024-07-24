@@ -396,7 +396,7 @@ namespace gnss_fgo {
   }
 
   void GNSSFGOLocalizationBase::onIMUMsgCb(const sensor_msgs::msg::Imu::ConstSharedPtr &imuMeasurement) {
-    static const auto transIMUFromBase = sensorCalibManager_->getTransformationFromBase("imu");
+    static const auto preRotateIMU = sensorCalibManager_->getPreRotation("imu");
     static const auto reference_trans = sensorCalibManager_->getTransformationFromBase("reference");
     static rclcpp::Time lastIMUTime{0, 0, RCL_ROS_TIME};
     static gtsam::Vector3 lastGyro{};
@@ -434,18 +434,19 @@ namespace gnss_fgo {
 
     fgoIMUMeasurement.accLin = (gtsam::Vector3()
       << imuMeasurement->linear_acceleration.x, imuMeasurement->linear_acceleration.y, imuMeasurement->linear_acceleration.z).finished(); //acc
-    fgoIMUMeasurement.accLin = transIMUFromBase.rotation().rotate(fgoIMUMeasurement.accLin);
-    fgoIMUMeasurement.accLinCov = gtsam::Matrix33(imuMeasurement->linear_acceleration_covariance.data());
+    fgoIMUMeasurement.accLin = preRotateIMU.rotate(fgoIMUMeasurement.accLin);
+    fgoIMUMeasurement.accLinCov = preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->linear_acceleration_covariance.data());
     fgoIMUMeasurement.gyro = (gtsam::Vector3()
       << imuMeasurement->angular_velocity.x, imuMeasurement->angular_velocity.y, imuMeasurement->angular_velocity.z).finished(); //angular vel
-    fgoIMUMeasurement.gyro = transIMUFromBase.rotation().rotate(fgoIMUMeasurement.gyro);
-    fgoIMUMeasurement.gyroCov = gtsam::Matrix33(imuMeasurement->angular_velocity_covariance.data());
+    fgoIMUMeasurement.gyro = preRotateIMU.rotate(fgoIMUMeasurement.gyro);
+    fgoIMUMeasurement.gyroCov = preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->angular_velocity_covariance.data());
     //ORIENTATION ALWAYS 0,0,0,1
-    fgoIMUMeasurement.AHRSOri = gtsam::Quaternion(imuMeasurement->orientation.w,
+    fgoIMUMeasurement.AHRSOri = gtsam::Rot3(imuMeasurement->orientation.w,
                                                   imuMeasurement->orientation.x,
                                                   imuMeasurement->orientation.y,
                                                   imuMeasurement->orientation.z);
-    fgoIMUMeasurement.AHRSOriCov = gtsam::Matrix33(imuMeasurement->orientation_covariance.data());
+    fgoIMUMeasurement.AHRSOri = preRotateIMU.compose(fgoIMUMeasurement.AHRSOri);
+    fgoIMUMeasurement.AHRSOriCov = preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->orientation_covariance.data());
 
     if (!lastIMUTime.nanoseconds()) // we got first measurement
     {
@@ -463,7 +464,7 @@ namespace gnss_fgo {
       lastGyro = (gtsam::Vector3() << imuMeasurement->angular_velocity.x,
         imuMeasurement->angular_velocity.y,
         imuMeasurement->angular_velocity.z).finished();
-
+      lastGyro = preRotateIMU.rotate(lastGyro);
       if (lastInitFinished_) {
         triggeredInit_ = true;
         conDoInit_.notify_one();

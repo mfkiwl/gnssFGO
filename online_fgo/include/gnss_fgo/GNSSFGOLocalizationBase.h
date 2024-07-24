@@ -97,7 +97,13 @@ namespace gnss_fgo
     {
     public:
         GNSSFGOLocalizationBase(const std::string& name, const rclcpp::NodeOptions &opt) : rclcpp::Node(name, opt) {};
-        ~GNSSFGOLocalizationBase() override = default;
+        ~GNSSFGOLocalizationBase() override
+        {
+          if(optThread_)
+            optThread_->join();
+          if(initFGOThread_)
+            initFGOThread_->join();
+        };
         GNSSFGOParamsPtr getParamPtr() {return paramsPtr_;}
 
     protected:

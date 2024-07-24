@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>online_fgo</name>
-  <version>0.0.1</version>
+  <version>2.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="h.zhang@irt.rwth-aachen.de">haoming.zhang</maintainer>
   <license>apache2</license>
@@ -35,6 +35,8 @@
   <depend>PCL</depend>
   <depend>ublox_msgs</depend>
   <depend>novatel_oem7_msgs</depend>
+  <depend>robognss_msgs</depend>
+  <depend>boreas_msgs</depend>
   <depend>rosbag2_cpp</depend>
   <depend>rosbag2_storage</depend>
   <depend>rosbag2_storage_default_plugins</depend>

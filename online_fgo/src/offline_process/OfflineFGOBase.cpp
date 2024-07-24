@@ -74,6 +74,17 @@ namespace offline_process {
     RCLCPP_INFO(this->get_logger(), "---------------------  OfflineFGOBase initialized! --------------------- ");
   }
 
+  OfflineFGOBase::~OfflineFGOBase() {
+    for(const auto& cb_pair : keyboard_callbacks_map_)
+    {
+      RCLCPP_INFO_STREAM(this->get_logger(), "OfflineFGO: deleting callback function " << cb_pair.first);
+      keyboard_handler_->delete_key_press_callback(cb_pair.second);
+    }
+    process_deferred_signal();
+    uninstall_signal_handlers();
+
+  }
+
   void OfflineFGOBase::offlineTimeCentricFGO(const double &time_start, const double &time_end) {
     // in this loop we simulate the time-centric fgo process using the trimmed dataset
     // the dataset should be TRIMMED in advance so that the first data is aligned with the prior state
@@ -250,7 +261,6 @@ namespace offline_process {
       if (opt_status_ == STOPPED)
         break;
     }
-    optThread_->join();
   }
 
   void OfflineFGOBase::processSingleEpoch(const StateIDTimestampMap_t &state_id_timestamps) {
@@ -415,4 +425,6 @@ namespace offline_process {
       opt_condition_.notify_one();
     }
   }
+
+
 }

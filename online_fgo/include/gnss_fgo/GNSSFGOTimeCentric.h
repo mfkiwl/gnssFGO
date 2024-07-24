@@ -54,11 +54,7 @@ namespace gnss_fgo {
      */
     explicit GNSSFGOTimeCentricNode(const rclcpp::NodeOptions &opt);
 
-    ~GNSSFGOTimeCentricNode() override
-    {
-      if(optThread_)
-        optThread_->join();
-    }
+    ~GNSSFGOTimeCentricNode() override = default;
 
   };
 } //namespace fgo

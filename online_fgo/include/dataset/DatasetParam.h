@@ -27,7 +27,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include "utils/ROSParameter.h"
-#include "data/BagUtils.h"
+#include "BagUtils.h"
 
 namespace fgo::dataset {
   struct DatasetParam {

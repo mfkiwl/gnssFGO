@@ -58,7 +58,7 @@ namespace fgo::data {
   struct IMUMeasurement {
     rclcpp::Time timestamp{0};  // timestamp of current imu meas
     double dt{};  // dt between consequent meas
-    gtsam::Quaternion AHRSOri{};
+    gtsam::Rot3 AHRSOri{};
     gtsam::Matrix33 AHRSOriCov{};
     gtsam::Vector3 accLin{};
     gtsam::Matrix33 accLinCov{};

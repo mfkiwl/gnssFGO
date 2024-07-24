@@ -35,7 +35,7 @@ namespace fgo::sensor {
   struct SensorParameter {
     std::string sensorName;
     std::string baseFrame;
-    gtsam::Rot3 preRotate;
+    gtsam::Rot3 preRotation;
     gtsam::Pose3 fromBase;  // transformation w.r.t. of base frame i.a. T^sensor_base
     std::map<std::string, gtsam::Pose3> toOthersMap;  // transformation from this sensor's frame to other's i.a. T^other_sensor
     std::map<std::string, std::vector<double>> intrinsicsRawMap; // todo
@@ -50,6 +50,7 @@ namespace fgo::sensor {
   class SensorCalibrationManager {
   public:
     using Ptr = std::shared_ptr<SensorCalibrationManager>;
+
     explicit SensorCalibrationManager(rclcpp::Node &node, const std::string &param_prefix = "") : rosPtr_(&node) {
       RCLCPP_INFO(rosPtr_->get_logger(),
                   "SensorCalibrationManager: initializing sensor calibration parameter manager from configs...");
@@ -63,18 +64,31 @@ namespace fgo::sensor {
 
     ~SensorCalibrationManager() = default;
 
+    gtsam::Rot3 getPreRotation(const std::string &sensor) const {
+      std::shared_lock lock(mutex_);
+      const auto iter = sensorMap_.find(sensor);
+      if (iter != sensorMap_.end()) {
+        return sensorMap_.at(sensor).preRotation;
+      } else
+        RCLCPP_WARN_STREAM(rosPtr_->get_logger(),
+                           "SensorCalibrationManager in getPreRotation: unknown sensor " << sensor);
+      return {};
+    }
+
+
     gtsam::Pose3 getTransformationFromBase(const std::string &sensor) const {
       std::shared_lock lock(mutex_);
       const auto iter = sensorMap_.find(sensor);
       if (iter != sensorMap_.end()) {
         return sensorMap_.at(sensor).fromBase;
       } else
-        RCLCPP_WARN_STREAM(rosPtr_->get_logger(), "SensorCalibrationManager: unknown sensor " << sensor);
+        RCLCPP_WARN_STREAM(rosPtr_->get_logger(),
+                           "SensorCalibrationManager in getTransformationFromBase: unknown sensor " << sensor);
       return {};
     }
 
     gtsam::Pose3 getTransformationFromBaseToTarget(const std::string &base,
-                                                         const std::string &target) const {
+                                                   const std::string &target) const {
       gtsam::Pose3 trans;
       std::shared_lock lock(mutex_);
       const auto iter = sensorMap_.find(base);
@@ -84,22 +98,27 @@ namespace fgo::sensor {
         if (iter_sub != baseSensor.toOthersMap.end())
           trans = baseSensor.toOthersMap.at(target);
         else
-          RCLCPP_WARN_STREAM(rosPtr_->get_logger(), "SensorCalibrationManager: unknown target sensor " << target);
+          RCLCPP_WARN_STREAM(rosPtr_->get_logger(),
+                             "SensorCalibrationManager in getTransformationFromBaseToTarget: unknown target sensor "
+                               << target);
         return trans;
       } else
-        RCLCPP_WARN_STREAM(rosPtr_->get_logger(), "SensorCalibrationManager: unknown base sensor " << target);
+        RCLCPP_WARN_STREAM(rosPtr_->get_logger(),
+                           "SensorCalibrationManager in getTransformationFromBaseToTarget: unknown base sensor "
+                             << target);
       return trans;
     }
 
-    void initialize(const std::string &param_prefix)
-    {
+    void initialize(const std::string &param_prefix) {
       std::unique_lock<std::shared_mutex> ul(mutex_);
       const auto param_ns = param_prefix + ".VehicleParameters";
 
       ::utils::RosParameter<std::vector<std::string>> sensors(param_ns + ".sensors", *rosPtr_);
       ::utils::RosParameter<std::string> base_frame(param_ns + ".baseFrame", *rosPtr_);
       baseFrame_ = base_frame.value();
-      RCLCPP_INFO_STREAM(rosPtr_->get_logger(), "SensorCalibrationManager: sensors used of " << param_prefix << " with base frame " << baseFrame_ <<" are: ");
+      RCLCPP_INFO_STREAM(rosPtr_->get_logger(),
+                         "SensorCalibrationManager: sensors used of " << param_prefix << " with base frame "
+                                                                      << baseFrame_ << " are: ");
       for (const auto &sensor: sensors.value()) {
         const auto param_ns_sensor = param_ns + "." + sensor;
         RCLCPP_INFO_STREAM(rosPtr_->get_logger(), "* sensor: " << sensor);
@@ -138,13 +157,13 @@ namespace fgo::sensor {
 
         if (rot_pre.size() == 3) {
           // rot parameter is given as roll pitch yaw in RAD!
-          sensor_param.preRotate = gtsam::Rot3::RzRyRx(rot_pre[0], rot_pre[1], rot_pre[2]);
+          sensor_param.preRotation = gtsam::Rot3::RzRyRx(rot_pre[0], rot_pre[1], rot_pre[2]);
         } else if (rot_pre.size() == 4) {
           // rot parameter is given as quaternion as w x y z
-          sensor_param.preRotate = gtsam::Rot3::Quaternion(rot_pre[0], rot_pre[1], rot_pre[2], rot_pre[3]);
+          sensor_param.preRotation = gtsam::Rot3::Quaternion(rot_pre[0], rot_pre[1], rot_pre[2], rot_pre[3]);
         } else if (rot_pre.size() == 9) {
           // rot parameter is given as rotation matrix
-          sensor_param.preRotate = gtsam::Rot3(gtsam::Matrix33(rot_pre.data()));
+          sensor_param.preRotation = gtsam::Rot3(gtsam::Matrix33(rot_pre.data()));
         } else {
           RCLCPP_WARN_STREAM(rosPtr_->get_logger(),
                              "* sensor" << sensor << " was given invalid pre rotation parameters in size "
@@ -171,66 +190,63 @@ namespace fgo::sensor {
           sen1_param.toOthersMap.insert(std::make_pair(sen2_name, trans_between));
           //RCLCPP_INFO_STREAM(rosPtr_->get_logger(),
           //                   "** param from " << sen1_name << " to: " << sen2_name << std::fixed
-           //                                   << "\n***  trans:" << trans_between.translation()
-           //                                   << "\n*** rpy: " << trans_between.rotation().rpy() * constants::rad2deg);
+          //                                   << "\n***  trans:" << trans_between.translation()
+          //                                   << "\n*** rpy: " << trans_between.rotation().rpy() * constants::rad2deg);
           //RCLCPP_INFO(rosPtr_->get_logger(), "******");
         }
       }
 
       ::utils::RosParameter<std::string> intrinsic_json(param_ns + ".intrinsic_json_path", "", *rosPtr_);
 
-      if(!intrinsic_json.value().empty())
+      if (!intrinsic_json.value().empty())
         this->readIntrinsicsFromJSON(intrinsic_json.value());
     }
 
-    void readIntrinsicsFromJSON(const std::string &json_file)
-    {
+    void readIntrinsicsFromJSON(const std::string &json_file) {
       // ToDo
     }
 
-    SensorParameter getSensorParameter(const std::string &sensor) const
-    {
+    SensorParameter getSensorParameter(const std::string &sensor) const {
       const auto iter = sensorMap_.find(sensor);
-      if(iter == sensorMap_.end()) {
-        RCLCPP_WARN_STREAM(rosPtr_->get_logger(), "SensorCalibrationManager: getSensorParameter unknown sensor " << sensor);
+      if (iter == sensorMap_.end()) {
+        RCLCPP_WARN_STREAM(rosPtr_->get_logger(),
+                           "SensorCalibrationManager: getSensorParameter unknown sensor " << sensor);
         return {};
       }
       return sensorMap_.at(sensor);
     }
 
-    void printSensorCalibParam(const std::string &sensor)
-    {
+    void printSensorCalibParam(const std::string &sensor) {
       const auto iter = sensorMap_.find(sensor);
-      if(iter == sensorMap_.end()) {
-        RCLCPP_WARN_STREAM(rosPtr_->get_logger(), "SensorCalibrationManager: printSensorCalibParam unknown sensor " << sensor);
+      if (iter == sensorMap_.end()) {
+        RCLCPP_WARN_STREAM(rosPtr_->get_logger(),
+                           "SensorCalibrationManager: printSensorCalibParam unknown sensor " << sensor);
         return;
       }
 
       const auto &sensorParam = sensorMap_.at(sensor);
-      std::cout << "********************** PRINTING SENSOR CALIBRATION PARAMETER of " << sensor << " **********************" << std::endl;
+      std::cout << "********************** PRINTING SENSOR CALIBRATION PARAMETER of " << sensor
+                << " **********************" << std::endl;
       std::cout << "********************** Extrinsic **********************" << std::endl;
       std::cout << "* base frame " << baseFrame_ << std::endl;
       std::cout << "* fromBase: " << std::endl;
       std::cout << "** trans: \n" << sensorParam.fromBase.translation() << std::endl;
       std::cout << "** rot rpy: \n " << sensorParam.fromBase.rotation().rpy() * constants::rad2deg << std::endl;
       std::cout << "* preRotate: " << std::endl;
-      std::cout << "** rot rpy: \n " << sensorParam.preRotate.rpy() * constants::rad2deg << std::endl;
+      std::cout << "** rot rpy: \n " << sensorParam.preRotation.rpy() * constants::rad2deg << std::endl;
 
-      for(const auto &[sen_name, sen_trans] : sensorParam.toOthersMap)
-      {
+      for (const auto &[sen_name, sen_trans]: sensorParam.toOthersMap) {
         std::cout << "* to sensor " << sen_name << std::endl;
         std::cout << "** trans: \n" << sen_trans.translation() << std::endl;
         std::cout << "** rot rpy: \n " << sen_trans.rotation().rpy() * constants::rad2deg << std::endl;
       }
 
-      if(!sensorParam.intrinsicsRawMap.empty())
-      {
+      if (!sensorParam.intrinsicsRawMap.empty()) {
         std::cout << "********************** Extrinsic **********************" << std::endl;
-        for(const auto &[int_name, int_param] : sensorParam.intrinsicsRawMap)
-        {
+        for (const auto &[int_name, int_param]: sensorParam.intrinsicsRawMap) {
           std::cout << "* " << int_name << ": ";
-          for(const auto& value : int_param)
-            std::cout<< std::fixed << value << ", ";
+          for (const auto &value: int_param)
+            std::cout << std::fixed << value << ", ";
           std::cout << std::endl;
         }
       }

@@ -193,12 +193,11 @@ namespace fgo::dataset {
       RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
                          "OfflineFGO Dataset " << name << ": start converting ...");
 
-      const auto transIMUFromBase = sensor_calib_manager_->getTransformationFromBase("imu");
+      const auto preRotationIMU = sensor_calib_manager_->getPreRotation("imu");
       DataBlock<IMUMeasurement>::DataMap imu_map;
-      std::cout << transIMUFromBase.rotation() << std::endl;
       for (const auto &time_msg_pair: raw_imu_msg) {
         imu_map.insert(std::make_pair(time_msg_pair.first, msg2IMUMeasurement(time_msg_pair.second, time_msg_pair.first,
-                                                                              transIMUFromBase.rotation().matrix())));
+                                                                              preRotationIMU.matrix())));
       }
       data_imu.setData(imu_map, true);
       RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
@@ -210,7 +209,7 @@ namespace fgo::dataset {
       DataBlock<PVASolution>::DataMap gps_map;
       for (const auto &time_msg_pair: raw_gps_pva_msg) {
         auto [pva, state] = sensor::gnss::parseOdomMsg(time_msg_pair.second, time_msg_pair.first,
-                                                       transGNSSFromBase.translation(), transIMUFromBase.rotation());
+                                                       transGNSSFromBase.translation(), preRotationIMU);
         gps_map.insert(std::make_pair(time_msg_pair.first, pva));
       }
       data_pva_gps.setData(gps_map, true);
@@ -222,7 +221,7 @@ namespace fgo::dataset {
       for (const auto &time_msg_pair: raw_gt_pva_msg) {
         auto [pva, state] = sensor::gnss::parseOdomMsg(time_msg_pair.second, time_msg_pair.first,
                                                        transReferenceFromBase.translation(),
-                                                       transIMUFromBase.rotation());
+                                                       preRotationIMU);
         gt_gps_map.insert(std::make_pair(time_msg_pair.first, pva));
         gt_state_map.insert(std::make_pair(time_msg_pair.first, state));
       }

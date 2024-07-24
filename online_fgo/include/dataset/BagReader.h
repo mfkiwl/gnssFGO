@@ -41,7 +41,7 @@
 //#include "sensor/gnss/GNSSDataParser.h"
 #include "data/DataTypesFGO.h"
 #include "dataset/DatasetParam.h"
-#include "data/BagUtils.h"
+#include "BagUtils.h"
 #include "utils/GNSSUtils.h"
 
 namespace fgo::dataset {

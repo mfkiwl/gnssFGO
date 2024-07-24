@@ -65,10 +65,10 @@ namespace fgo::data {
       {DataType::NovAtelINSPVA,          "NovAtelINSPVA"},
       {DataType::IRTGNSSObsPreProcessed, "IRTGNSSObsPreProcessed"},
       {DataType::IMU,                    "IMU"},
-      {DataType::PointCloud2,                    "PointCloud2"},
-      {DataType::MonoImage,                    "MonoImage"},
-      {DataType::StereoImage,                    "StereoImage"},
-      {DataType::Pose,                    "Pose"},
+      {DataType::PointCloud2,            "PointCloud2"},
+      {DataType::MonoImage,              "MonoImage"},
+      {DataType::StereoImage,            "StereoImage"},
+      {DataType::Pose,                   "Pose"},
 
     };
 
@@ -79,10 +79,10 @@ namespace fgo::data {
       {"Odometry",               DataType::Odometry},
       {"NovAtelINSPVA",          DataType::NovAtelINSPVA},
       {"IRTGNSSObsPreProcessed", DataType::IRTGNSSObsPreProcessed},
-      {"PointCloud2", DataType::PointCloud2},
-      {"MonoImage", DataType::MonoImage},
-      {"StereoImage", DataType::StereoImage},
-      {"Pose", DataType::Pose},
+      {"PointCloud2",            DataType::PointCloud2},
+      {"MonoImage",              DataType::MonoImage},
+      {"StereoImage",            DataType::StereoImage},
+      {"Pose",                   DataType::Pose},
 
     };
 
@@ -141,10 +141,9 @@ namespace fgo::data {
     imuMeasurement.accLin = trans * imuMeasurement.accLin;
 
     imuMeasurement.accLinCov = gtsam::Matrix33(imuMsg.linear_acceleration_covariance.data());
-    imuMeasurement.AHRSOri.w() = imuMsg.orientation.w;
-    imuMeasurement.AHRSOri.x() = imuMsg.orientation.x;
-    imuMeasurement.AHRSOri.y() = imuMsg.orientation.y;
-    imuMeasurement.AHRSOri.z() = imuMsg.orientation.z;
+    imuMeasurement.AHRSOri = gtsam::Rot3(imuMsg.orientation.w, imuMsg.orientation.x, imuMsg.orientation.y,
+                                         imuMsg.orientation.z);
+    imuMeasurement.AHRSOri = gtsam::Rot3(trans * imuMeasurement.AHRSOri.matrix());
     imuMeasurement.gyro.x() = imuMsg.angular_velocity.x;
     imuMeasurement.gyro.y() = imuMsg.angular_velocity.y;
     imuMeasurement.gyro.z() = imuMsg.angular_velocity.z;
