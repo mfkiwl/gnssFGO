@@ -52,6 +52,16 @@ def generate_launch_description():
         default_value=default_config_optimizer,
         description='OptimizerParameters')
 
+    default_config_sensor_parameters = os.path.join(
+        get_package_share_directory('online_fgo'),
+        'config/deutschland_tc',
+        'sensor_parameters.yaml'
+    )
+    declare_config_sensor_parameters_path_cmd = DeclareLaunchArgument(
+        'config_common_path',
+        default_value=default_config_sensor_parameters,
+        description='SensorParameters')
+
     online_fgo_node = Node(
         package='online_fgo',
         executable='online_fgo_node',
@@ -66,6 +76,7 @@ def generate_launch_description():
             default_config_common,
             default_config_integrator,
             default_config_optimizer,
+            default_config_sensor_parameters,
             {
 
             }
@@ -113,6 +124,7 @@ def generate_launch_description():
     ld.add_action(declare_config_common_path_cmd)
     ld.add_action(declare_config_integrtor_path_cmd)
     ld.add_action(declare_config_optimizer_path_cmd)
+    ld.add_action(declare_config_sensor_parameters_path_cmd)
     ld.add_action(online_fgo_node)
     ld.add_action(robot_des)
     # ld.add_action(plot_node)

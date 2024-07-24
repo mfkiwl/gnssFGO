@@ -17,26 +17,22 @@
 
 #ifndef ONLINE_FGO_INTEGRATIONBASE_H
 #define ONLINE_FGO_INTEGRATIONBASE_H
-
 #pragma once
 
 #include <tuple>
 #include <boost/algorithm/string.hpp>
 #include <boost/optional.hpp>
+#include <gtsam/navigation/AttitudeFactor.h>
 #include <irt_nav_msgs/msg/pps.hpp>
 #include <irt_nav_msgs/msg/sensor_processing_report.hpp>
 
 #include "graph/GraphBase.h"
-#include "data/DataTypes.h"
+#include "data/DataTypesFGO.h"
 #include "utils/ROSParameter.h"
 #include "factor/motion/GPWNOAPriorPose3.h"
 #include "factor/motion/GPWNOJPriorPose3.h"
 #include "model/gp_interpolator/GPWNOAInterpolator.h"
 #include "model/gp_interpolator/GPWNOJInterpolator.h"
-#include "model/gp_interpolator/GPWNOJInterpolatorFull.h"
-#include "model/gp_interpolator/GPSingerInterpolator.h"
-#include "model/gp_interpolator/GPSingerInterpolatorFull.h"
-
 #include "utils/MeasurmentDelayCalculator.h"
 #include "graph/GraphUtils.h"
 #include "integrator/param/IntegratorParams.h"
@@ -46,8 +42,8 @@
 #include "factor/odometry/GPInterpolatedNavVelocityFactor.h"
 #include "factor/odometry/NavPoseFactor.h"
 #include "factor/odometry/GPInterpolatedNavPoseFactor.h"
-#include "factor/motion/VelocityPreintegration.h"
 #include "solver/FixedLagSmoother.h"
+#include "sensor/SensorCalibrationManager.h"
 
 namespace fgo::integrator {
   using namespace fgo::integrator::param;
@@ -88,10 +84,12 @@ namespace fgo::integrator {
   class IntegratorBase {
   protected:
     std::string integratorName_;
+    std::string sensorName_;
     bool isPrimarySensor_ = false;
 
     rclcpp::Node *rosNodePtr_{}; // ROS Node Handle.
     rclcpp::Publisher<irt_nav_msgs::msg::SensorProcessingReport>::SharedPtr pubSensorReport_;
+
     fgo::graph::GraphBase *graphPtr_{};
     IntegratorBaseParamsPtr integratorBaseParamPtr_;
     uint64_t nState_{};
@@ -106,6 +104,7 @@ namespace fgo::integrator {
      */
     rclcpp::Subscription<irt_nav_msgs::msg::PPS>::SharedPtr subPPS_;
     std::unique_ptr<fgo::utils::MeasurementDelayCalculator> delayCalculator_;
+    sensor::SensorCalibrationManager::Ptr sensorCalibManager_;
 
   public:
 
@@ -291,7 +290,6 @@ namespace fgo::integrator {
         RCLCPP_WARN_STREAM(rclcpp::get_logger("onlineFGO"),
                            type << " improper noise model: " << modelStrLower << " setting as Gaussian");
       }
-
     }
 
 
@@ -432,6 +430,7 @@ namespace fgo::integrator {
                             fgo::graph::GraphBase &graphPtr,
                             const std::string &integratorName,
                             bool isPrimarySensor = false) {
+      /*
       rosNodePtr_ = &node;
       graphPtr_ = &graphPtr;
       integratorName_ = integratorName;
@@ -442,6 +441,39 @@ namespace fgo::integrator {
       pubSensorReport_ = rosNodePtr_->create_publisher<irt_nav_msgs::msg::SensorProcessingReport>(
         "sensor_processing_report/" + integratorName_,
         rclcpp::SystemDefaultsQoS());
+        */
+      rosNodePtr_ = &node;
+      graphPtr_ = &graphPtr;
+      integratorName_ = integratorName;
+      integratorBaseParamPtr_ = std::make_shared<fgo::integrator::param::IntegratorBaseParams>(graphPtr_->getParamPtr());
+      isPrimarySensor_ = isPrimarySensor;
+
+      ::utils::RosParameter<std::string> sensorName("GNSSFGO." + integratorName + ".sensorName", *rosNodePtr_);
+      sensorName_ = sensorName.value();
+
+      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                         "--------------------- " << integratorName << " with sensor name " << sensorName_
+                                                  << ": start base initialization... ---------------------");
+      RCLCPP_INFO(rosNodePtr_->get_logger(), "------- IntegratorBase Parameters: -------");
+
+      ::utils::RosParameter<double> IMUGNSSSyncTimeThreshold("GNSSFGO.IntegratorBase.IMUSensorSyncTimeThreshold",
+                                                             *rosNodePtr_);
+      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "IMUSensorSyncTimeThreshold: " << IMUGNSSSyncTimeThreshold.value());
+      integratorBaseParamPtr_->IMUSensorSyncTimeThreshold = IMUGNSSSyncTimeThreshold.value();
+      ::utils::RosParameter<double> StateSensorSyncTimeThreshold("GNSSFGO.IntegratorBase.StateSensorSyncTimeThreshold",
+                                                                 *rosNodePtr_);
+      integratorBaseParamPtr_->StateSensorSyncTimeThreshold = StateSensorSyncTimeThreshold.value();
+      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                         "StateSensorSyncTimeThreshold: " << StateSensorSyncTimeThreshold.value());
+
+      sensorCalibManager_ = graphPtr.getSensorCalibManagerPtr();
+      pubSensorReport_ = rosNodePtr_->create_publisher<irt_nav_msgs::msg::SensorProcessingReport>(
+        "sensor_processing_report/" + integratorName_,
+        rclcpp::SystemDefaultsQoS());
+
+      sensorCalibManager_->printSensorCalibParam(sensorName_);
+      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                         "--------------------- " << integratorName << ": base initialized... ---------------------");
     };
 
     //Todo: @haoming this is ugly!

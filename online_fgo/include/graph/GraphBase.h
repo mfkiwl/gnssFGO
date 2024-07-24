@@ -30,7 +30,6 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <utility>
 
-#include <irt_nav_msgs/msg/residual_sample.hpp>
 #include <irt_nav_msgs/msg/factor_residual.hpp>
 #include <irt_nav_msgs/msg/factor_residuals.hpp>
 #include <irt_nav_msgs/msg/sensor_processing_report.hpp>
@@ -43,33 +42,32 @@
 //internal
 #include "graph/GraphUtils.h"
 #include "graph/param/GraphParams.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 //#include "factor/inertial/MagFactor_eRb.h"
 #include "factor/motion/ConstAngularRateFactor.h"
 #include "factor/motion/ConstAccelerationFactor.h"
+
 #include "factor/motion/ConstDriftFactor.h"
 #include "factor/motion/ConstVelPriorFactor.h"
 #include "factor/motion/GPWNOAPriorPose3.h"
 #include "factor/motion/GPWNOJPriorPose3.h"
-#include "factor/motion/GPWNOJPriorPose3Full.h"
-#include "factor/motion/GPSingerPriorPose3.h"
-#include "factor/motion/GPSingerPriorPose3Full.h"
 #include "solver/FixedLagSmoother.h"
 #include "solver/BatchFixedLagSmoother.h"
 #include "solver/IncrementalFixedLagSmoother.h"
-#include "data/DataTypes.h"
+#include "data/DataTypesFGO.h"
 #include "data/Buffer.h"
 #include "utils/NavigationTools.h"
 #include "utils/ROSParameter.h"
 #include "utils/Pose3Utils.h"
 #include "gnss_fgo/param/GNSSFGOParams.h"
 #include "utils/GPUtils.h"
+#include "sensor/SensorCalibrationManager.h"
 
 
 namespace fgo::integrator {
   class IntegratorBase;
 
-  using IntegratorMap = std::map<std::string, std::shared_ptr<IntegratorBase>>;
+  typedef std::map<std::string, std::shared_ptr<IntegratorBase>> IntegratorMap;
 }
 
 namespace gnss_fgo {
@@ -86,10 +84,8 @@ namespace fgo::graph {
   using gtsam::symbol_shorthand::W;  // angular Velocity in body  frame
   using gtsam::symbol_shorthand::N;  // integer ddambiguities
   using gtsam::symbol_shorthand::M;  // integer ambiguities for td cp without dd
-  using gtsam::symbol_shorthand::A;  // acceleration in body frame
+  using gtsam::symbol_shorthand::A;  // acceleration
   using gtsam::symbol_shorthand::O;
-  using gtsam::symbol_shorthand::L; //Linear acc
-  using gtsam::symbol_shorthand::R;  //
 
   enum StateMeasSyncStatus {
     SYNCHRONIZED_I = 0,
@@ -111,16 +107,17 @@ namespace fgo::graph {
     std::string graphName_ = "OnlineFGO";
     gnss_fgo::GNSSFGOLocalizationBase *appPtr_;
     rclcpp::Publisher<irt_nav_msgs::msg::FactorResiduals>::SharedPtr pubResiduals_;
+    rclcpp::Publisher<irt_nav_msgs::msg::FactorResiduals>::SharedPtr pubGTResiduals_;
 
     std::shared_ptr<std::thread> pubResidualsThread_;
     boost::shared_ptr<gtsam::PreintegratedCombinedMeasurements::Params> preIntegratorParams_;
     pluginlib::ClassLoader<fgo::integrator::IntegratorBase> integratorLoader_; ///< Plugin loader
     GraphParamBasePtr graphBaseParamPtr_;
+    sensor::SensorCalibrationManager::Ptr sensorCalibManager_;
 
     fgo::integrator::IntegratorMap integratorMap_;
     std::shared_ptr<fgo::integrator::IntegratorBase> primarySensor_;
 
-    //fgo::param::GNSSINSIntegrationParams LIOParams_;
     fgo::solvers::FixedLagSmoother::KeyTimestampMap keyTimestampMap_;
     fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap currentKeyIndexTimestampMap_;
     gtsam::Values values_;
@@ -144,24 +141,23 @@ namespace fgo::graph {
 
     inline void addAngularFactor(const gtsam::Key &omega_j, const gtsam::Key &bias_j,
                                  const fgo::data::IMUMeasurement &imuM,
-                                 const boost::optional<gtsam::Matrix33> &gyroConv = boost::none) {
+                                 const gtsam::Vector3 &variance = gtsam::Vector3::Identity()) {
       gtsam::SharedNoiseModel noise_model;
 
-      if (graphBaseParamPtr_->useEstimatedVarianceAfterInit && gyroConv)
-        noise_model = gtsam::noiseModel::Gaussian::Covariance(*gyroConv);
+      if (graphBaseParamPtr_->addEstimatedVarianceAfterInit)
+        noise_model = gtsam::noiseModel::Diagonal::Variances(variance);
       else
         noise_model = gtsam::noiseModel::Diagonal::Sigmas(
-          graphBaseParamPtr_->angularRateStd * imuM.gyroCov.diagonal());
+          graphBaseParamPtr_->angularRateStd * gtsam::Vector3::Identity());
 
-      this->emplace_shared<fgo::factor::ConstAngularRateFactor>(omega_j, bias_j, imuM.gyro, noise_model,
-                                                                graphBaseParamPtr_->AutoDiffNormalFactor);
+      this->emplace_shared<fgo::factor::ConstAngularRateFactor>(omega_j, bias_j, imuM.gyro, noise_model);
     }
 
     inline void addConstantAccelerationFactor(const gtsam::Key &accKey, const gtsam::Key &biasKey,
                                               const fgo::data::IMUMeasurement &imu,
                                               const boost::optional<gtsam::Matrix66> &accConv = boost::none) {
       gtsam::SharedNoiseModel noise_model;
-      if (graphBaseParamPtr_->useEstimatedVarianceAfterInit && accConv)
+      if (graphBaseParamPtr_->addEstimatedVarianceAfterInit && accConv)
         noise_model = gtsam::noiseModel::Gaussian::Covariance(*accConv);
       else
         noise_model = gtsam::noiseModel::Diagonal::Sigmas(
@@ -190,7 +186,7 @@ namespace fgo::graph {
     inline void addConstDriftFactor(const gtsam::Key &cbd_i, const gtsam::Key &cbd_j, const double &dt,
                                     const gtsam::Vector2 &variance = gtsam::Vector2::Identity()) {
       gtsam::Vector2 var;
-      if (graphBaseParamPtr_->useEstimatedVarianceAfterInit)
+      if (graphBaseParamPtr_->addEstimatedVarianceAfterInit)
         var = variance;
       else
         var = gtsam::Vector2(std::pow(graphBaseParamPtr_->constBiasStd, 2),
@@ -200,8 +196,7 @@ namespace fgo::graph {
                                                                  var,
                                                                  graphBaseParamPtr_->robustParamClockFactor,
                                                                  "ConstClockDriftFactor");
-      this->emplace_shared<fgo::factor::ConstDriftFactor>(cbd_i, cbd_j, dt, noise_model_cbd,
-                                                          graphBaseParamPtr_->AutoDiffNormalFactor);
+      this->emplace_shared<fgo::factor::ConstDriftFactor>(cbd_i, cbd_j, dt, noise_model_cbd);
     }
 
     inline void addMotionModelFactor(const gtsam::Key &pose_i, const gtsam::Key &vel_i, const gtsam::Key &pose_j,
@@ -212,46 +207,22 @@ namespace fgo::graph {
       this->emplace_shared<fgo::factor::MotionModelFactor>(pose_i, vel_i, pose_j, vel_j, dt, noise_model_mm);
     }
 
-    inline void addGPMotionPrior(
-      const gtsam::Key &poseKey_i, const gtsam::Key &velKey_i, const gtsam::Key &omegaKey_i, const gtsam::Key &accKey_i,
-      const gtsam::Key &poseKey_j, const gtsam::Key &velKey_j, const gtsam::Key &omegaKey_j, const gtsam::Key &accKey_j,
-      double dt,
-      const boost::optional<gtsam::Vector6> &acc_i = boost::none,
-      const boost::optional<gtsam::Vector6> &acc_j = boost::none,
-      const boost::optional<gtsam::Matrix6> &ad = boost::none) {
+    inline void addGPMotionPrior(const gtsam::Key &pose_i, const gtsam::Key &vel_i, const gtsam::Key &omega_i,
+                                 const gtsam::Key &pose_j, const gtsam::Key &vel_j, const gtsam::Key &omega_j,
+                                 double dt,
+                                 const boost::optional<gtsam::Vector6> &acc_i = boost::none,
+                                 const boost::optional<gtsam::Vector6> &acc_j = boost::none) {
       gtsam::SharedNoiseModel qcModel = gtsam::noiseModel::Diagonal::Variances(graphBaseParamPtr_->QcGPMotionPriorFull);
+
       if (acc_i && acc_j) {
-        if (ad) {  //Singer
-          if (graphBaseParamPtr_->fullGPPrior)
-            this->emplace_shared<fgo::factor::GPSingerPriorPose3Full>(poseKey_i, velKey_i, omegaKey_i, accKey_i,
-                                                                      poseKey_j, velKey_j, omegaKey_j, accKey_j,
-                                                                      dt, qcModel, *ad,
-                                                                      graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
-                                                                      graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian,
-                                                                      *acc_i, *acc_j);
-          else
-            this->emplace_shared<fgo::factor::GPSingerPriorPose3>(poseKey_i, velKey_i, omegaKey_i, poseKey_j, velKey_j,
-                                                                  omegaKey_j, dt, qcModel, *ad, *acc_i, *acc_j,
-                                                                  graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
-                                                                  graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
-        } else { //WNOJ
-          if (graphBaseParamPtr_->fullGPPrior)
-            this->emplace_shared<fgo::factor::GPWNOJPriorPose3Full>(poseKey_i, velKey_i, omegaKey_i, accKey_i,
-                                                                    poseKey_j, velKey_j, omegaKey_j, accKey_j,
-                                                                    dt, qcModel,
-                                                                    graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
-                                                                    graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian,
-                                                                    *acc_i, *acc_j);
-          else
-            this->emplace_shared<fgo::factor::GPWNOJPriorPose3>(poseKey_i, velKey_i, omegaKey_i, poseKey_j, velKey_j,
-                                                                omegaKey_j, *acc_i, *acc_j, dt, qcModel,
-                                                                graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
-                                                                graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
-        }
+        this->emplace_shared<fgo::factor::GPWNOJPriorPose3>(pose_i, vel_i, omega_i, pose_j, vel_j,
+                                                            omega_j, *acc_i, *acc_j, dt, qcModel,
+                                                            graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
+                                                            graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
 
       } else
-        this->emplace_shared<fgo::factor::GPWNOAPriorPose3>(poseKey_i, velKey_i, omegaKey_i, poseKey_j, velKey_j,
-                                                            omegaKey_j, dt, qcModel,
+        this->emplace_shared<fgo::factor::GPWNOAPriorPose3>(pose_i, vel_i, omega_i, pose_j, vel_j,
+                                                            omega_j, dt, qcModel,
                                                             graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
                                                             graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
     }
@@ -261,6 +232,7 @@ namespace fgo::graph {
     void calculateResiduals(const rclcpp::Time &timestamp, const gtsam::Values &result,
                             const gtsam::Marginals &marginals);
 
+    void calculateGroundTruthResiduals(const rclcpp::Time &timestamp, const gtsam::Values &gt);
 
   public:
     //constructor
@@ -270,6 +242,7 @@ namespace fgo::graph {
     explicit GraphBase(gnss_fgo::GNSSFGOLocalizationBase &node);
 
     [[nodiscard]] GraphParamBasePtr getParamPtr() { return graphBaseParamPtr_; }
+    [[nodiscard]] sensor::SensorCalibrationManager::Ptr getSensorCalibManagerPtr() {return sensorCalibManager_;}
 
     /***
      * initialize the graph, used in the application after collecting all prior variables
@@ -363,14 +336,13 @@ namespace fgo::graph {
     };
 
     /**
-     *
-     * @param name
-     * @return
-     */
+    * Get an integrator pointer of base class that can be reinterpreted as the target integrator
+    * @param name
+    * @return
+    */
     [[nodiscard]] std::shared_ptr<integrator::IntegratorBase> getIntegrator(const std::string &name) {
       auto iter = integratorMap_.find(name);
       if (iter != integratorMap_.end()) {
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "GraphBase: Getting integrator " << name);
         return iter->second;
       } else
         return nullptr;

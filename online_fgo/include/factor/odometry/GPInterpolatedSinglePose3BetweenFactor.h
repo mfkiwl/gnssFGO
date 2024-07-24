@@ -26,14 +26,9 @@
 #include <gtsam/base/Lie.h>
 #include <gtsam/base/numericalDerivative.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
-#include "model/gp_interpolator/GPWNOAInterpolator.h"
-#include "include/factor/FactorTypes.h"
-#include "factor/FactorTypeIDs.h"
-
-// This will trigger a LNKxxxx on MSVC, so disable for MSVC build
-// Please refer to https://github.com/borglab/gtsam/blob/develop/Using-GTSAM-EXPORT.md
-#define BETWEENFACTOR_VISIBILITY GTSAM_EXPORT
-
+#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "include/factor/FactorType.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
   /**
@@ -148,7 +143,6 @@ namespace fgo::factor {
         hx = gtsam::traits<gtsam::Pose3>::Between(poseInter, p2, &Hpose1, &Hpose2); // h(x)
 
       // manifold equivalent of h(x)-z -> log(z,h(x))
-
       typename gtsam::traits<gtsam::Pose3>::ChartJacobian::Jacobian Hlocal;
       gtsam::Vector rval = gtsam::traits<gtsam::Pose3>::Local(measured_, hx, boost::none, &Hlocal);
 
@@ -165,8 +159,10 @@ namespace fgo::factor {
       if (H5) *H5 = Hlocal * Hint15_P;
       if (H6) *H6 = Hlocal * Hint16_P;
       if (H7) *H7 = Hlocal * Hpose2;
+
       //gtsam::Vector6 zero = (gtsam::Vector6() << 0.000001, 0.000001, 0.000001, 0.000001, 0.000001, 0.000001).finished();
       return rval;
+
     }
 
     /** lifting all related state values in a vector after the ordering for evaluateError **/

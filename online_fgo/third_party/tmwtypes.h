@@ -577,7 +577,7 @@ typedef UINTEGER_T uint_T;
 #ifndef BYTE_T
 # define BYTE_T unsigned char
 #endif
-typedef BYTE_T byte_T;
+//typedef BYTE_T byte_T;
 
 
 /*===========================================================================*

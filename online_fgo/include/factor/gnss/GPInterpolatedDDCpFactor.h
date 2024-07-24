@@ -20,8 +20,8 @@
 #define ONLINE_FGO_GPINTERPOLATEDDDCPFACTORO_H
 
 #include "model/gp_interpolator/GPInterpolatorBase.h"
-#include "include/factor/FactorTypes.h"
-#include "factor/FactorTypeIDs.h"
+#include "include/factor/FactorType.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
  * Keys: pose of time i&j X(i)&X(j), velocity of time i&j V(i)&V(j), integer double differenced ambiguity of time i M(i)
@@ -126,12 +126,12 @@ namespace fgo::factor {
       if (useAutoDiff_) {
         if (H1)
           *H1 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Pose3>(
-            boost::bind(&This::evaluateError_, this, boost::placeholders::_1, vel1, omega1, ddambiguity_j, pose2,
-                        vel2, omega2), pose1);
+            boost::bind(&This::evaluateError_, this, boost::placeholders::_1, vel1, omega1, ddambiguity_j, pose2, vel2,
+                        omega2), pose1);
         if (H2)
           *H2 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
-            boost::bind(&This::evaluateError_, this, pose1, boost::placeholders::_1, omega1, ddambiguity_j, pose2,
-                        vel2, omega2), vel1);
+            boost::bind(&This::evaluateError_, this, pose1, boost::placeholders::_1, omega1, ddambiguity_j, pose2, vel2,
+                        omega2), vel1);
         if (H3)
           *H3 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
             boost::bind(&This::evaluateError_, this, pose1, vel1, boost::placeholders::_1, ddambiguity_j, pose2, vel2,
@@ -144,12 +144,12 @@ namespace fgo::factor {
         }
         if (H5)
           *H5 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Pose3>(
-            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, ddambiguity_j, boost::placeholders::_1,
-                        vel2, omega2), pose2);
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, ddambiguity_j, boost::placeholders::_1, vel2,
+                        omega2), pose2);
         if (H6)
           *H6 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
-            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, ddambiguity_j, pose2,
-                        boost::placeholders::_1, omega2), vel2);
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, ddambiguity_j, pose2, boost::placeholders::_1,
+                        omega2), vel2);
         if (H7)
           *H7 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
             boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, ddambiguity_j, pose2, vel2,

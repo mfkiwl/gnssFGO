@@ -27,10 +27,10 @@
 #include <gtsam/base/Vector.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/geometry/Point3.h>
-#include "model/gp_interpolator/GPWNOAInterpolator.h"
-#include "include/factor/FactorTypes.h"
+#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "include/factor/FactorType.h"
 #include "utils/NavigationTools.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 

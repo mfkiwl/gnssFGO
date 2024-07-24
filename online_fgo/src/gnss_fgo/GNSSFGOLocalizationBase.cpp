@@ -24,30 +24,34 @@ namespace gnss_fgo {
       paramsPtr_ = std::make_shared<GNSSFGOParams>();
 
     // PARAM: General process logics
+    utils::RosParameter<std::string> sensor_param_prefix("GNSSFGO.VehicleParameterPrefix", "GNSSFGO", *this);
+    RCLCPP_WARN_STREAM(get_logger(), "VehicleParameterPrefix:" << sensor_param_prefix.value());
+    sensorCalibManager_ = std::make_shared<fgo::sensor::SensorCalibrationManager>(*this, sensor_param_prefix.value());
 
     utils::RosParameter<bool> offlineProcess("GNSSFGO.offlineProcess", false, *this);
     paramsPtr_->offlineProcess = offlineProcess.value();
     RCLCPP_WARN_STREAM(get_logger(), "offlineProcess:" << (paramsPtr_->offlineProcess ? "true" : "false"));
+
+    utils::RosParameter<bool> cleanIMUonInit("GNSSFGO.cleanIMUonInit", true, *this);
+    paramsPtr_->cleanIMUonInit = cleanIMUonInit.value();
+    RCLCPP_WARN_STREAM(get_logger(), "cleanIMUOnInit:" << (paramsPtr_->cleanIMUonInit ? "true" : "false"));
+
+    utils::RosParameter<bool> useHeaderTimestamp("GNSSFGO.useHeaderTimestamp", *this);
+    paramsPtr_->useHeaderTimestamp = useHeaderTimestamp.value();
+    RCLCPP_INFO_STREAM(this->get_logger(), "useHeaderTimestamp: " << paramsPtr_->useHeaderTimestamp);
+
     utils::RosParameter<bool> delayFromPPS("GNSSFGO.delayFromPPS", false, *this);
     paramsPtr_->delayFromPPS = delayFromPPS.value(); // only if PRDR activated
     RCLCPP_WARN_STREAM(get_logger(), "delayFromPPS:" << (paramsPtr_->delayFromPPS ? "true" : "false"));
+
     utils::RosParameter<bool> verbose("GNSSFGO.verbose", false, *this);
     paramsPtr_->verbose = verbose.value();
     RCLCPP_WARN_STREAM(get_logger(), "verbose:" << (paramsPtr_->verbose ? "true" : "false"));
 
-    utils::RosParameter<bool> addIMUFactor("GNSSFGO.Graph.addIMUFactor", true, *this);
-    paramsPtr_->addIMUFactor = addIMUFactor.value();
-    RCLCPP_WARN_STREAM(get_logger(), "addIMUFactor:" << (paramsPtr_->addIMUFactor ? "true" : "false"));
     utils::RosParameter<bool> useIMUAsTimeReference("GNSSFGO.useIMUAsTimeReference", false, *this);
     paramsPtr_->useIMUAsTimeReference = useIMUAsTimeReference.value();
     RCLCPP_WARN_STREAM(get_logger(),
                        "useIMUAsTimeReference:" << (paramsPtr_->useIMUAsTimeReference ? "true" : "false"));
-
-    if (!paramsPtr_->addIMUFactor && paramsPtr_->useIMUAsTimeReference) {
-      RCLCPP_WARN(get_logger(),
-                  "Set using the imu as time reference while not using the IMU, not using the IMU as the time reference...");
-      paramsPtr_->useIMUAsTimeReference = false;
-    }
 
     utils::RosParameter<bool> calibGravity("GNSSFGO.calibGravity", true, *this);
     paramsPtr_->calibGravity = calibGravity.value();
@@ -58,23 +62,6 @@ namespace gnss_fgo {
     paramsPtr_->calcErrorOnOpt = calcErrorOnOpt.value();
     RCLCPP_WARN_STREAM(get_logger(),
                        "calcErrorOnOpt: " << (paramsPtr_->calcErrorOnOpt ? "true" : "false"));
-
-    utils::RosParameter<bool> useGPPriorFactor("GNSSFGO.Graph.addGPPriorFactor", false, *this);
-    paramsPtr_->addGPPriorFactor = useGPPriorFactor.value();
-    RCLCPP_WARN_STREAM(get_logger(), "addGPPriorFactor:" << (paramsPtr_->addGPPriorFactor ? "true" : "false"));
-
-    utils::RosParameter<bool> addGPInterpolatedFactor("GNSSFGO.Graph.addGPInterpolatedFactor", *this);
-    paramsPtr_->addGPInterpolatedFactor = addGPInterpolatedFactor.value();
-    RCLCPP_WARN_STREAM(get_logger(),
-                       "addGPInterpolatedFactor: " << (paramsPtr_->addGPInterpolatedFactor ? "true" : "false"));
-
-    utils::RosParameter<bool> cleanIMUonInit("GNSSFGO.cleanIMUOnInit", true, *this);
-    paramsPtr_->cleanIMUOnInit = cleanIMUonInit.value();
-    RCLCPP_WARN_STREAM(get_logger(), "cleanIMUOnInit:" << (paramsPtr_->cleanIMUOnInit ? "true" : "false"));
-
-    utils::RosParameter<bool> useHeaderTimestamp("GNSSFGO.useHeaderTimestamp", *this);
-    paramsPtr_->useHeaderTimestamp = useHeaderTimestamp.value();
-    RCLCPP_WARN_STREAM(this->get_logger(), "useHeaderTimestamp: " << paramsPtr_->useHeaderTimestamp);
 
     // PARAM: parameters
     utils::RosParameter<int> optFrequency("GNSSFGO.optFrequency", 10, *this);
@@ -93,64 +80,56 @@ namespace gnss_fgo {
     utils::RosParameter<std::vector<double>> initSigmaX("GNSSFGO.Initialization.initSigmaX", *this);
     lastOptimizedState_.poseVar = gtsam::Vector6(initSigmaX.value().data()).asDiagonal();
     lastOptimizedState_.poseVar.block<3, 3>(0, 0) = lastOptimizedState_.poseVar.block<3, 3>(0, 0);
-    RCLCPP_WARN_STREAM(get_logger(), "poseVar:" << lastOptimizedState_.poseVar);
+    RCLCPP_INFO_STREAM(get_logger(), "poseVar:" << lastOptimizedState_.poseVar);
 
     utils::RosParameter<std::vector<double>> initSigmaV("GNSSFGO.Initialization.initSigmaV", *this);
     lastOptimizedState_.velVar = gtsam::Vector3(initSigmaV.value().data()).asDiagonal();
-    RCLCPP_WARN_STREAM(get_logger(), "velVar:" << lastOptimizedState_.velVar);
+    RCLCPP_INFO_STREAM(get_logger(), "velVar:" << lastOptimizedState_.velVar);
 
     utils::RosParameter<std::vector<double>> initSigmaW("GNSSFGO.Initialization.initSigmaW", *this);
     lastOptimizedState_.omegaVar = gtsam::Vector3(initSigmaW.value().data()).asDiagonal();
     lastOptimizedState_.omegaVar = lastOptimizedState_.omegaVar;
-    RCLCPP_WARN_STREAM(get_logger(), "omegaVar:" << lastOptimizedState_.omegaVar);
+    RCLCPP_INFO_STREAM(get_logger(), "omegaVar:" << lastOptimizedState_.omegaVar);
 
     utils::RosParameter<std::vector<double>> initSigmaB("GNSSFGO.Initialization.initSigmaB", *this);
     lastOptimizedState_.imuBiasVar = gtsam::Vector6(initSigmaB.value().data()).asDiagonal();
     lastOptimizedState_.imuBiasVar.block<3, 3>(3, 3) = lastOptimizedState_.imuBiasVar.block<3, 3>(3, 3);
-    RCLCPP_WARN_STREAM(get_logger(), "imuBiasVar:" << lastOptimizedState_.imuBiasVar);
+    RCLCPP_INFO_STREAM(get_logger(), "imuBiasVar:" << lastOptimizedState_.imuBiasVar);
 
     utils::RosParameter<std::vector<double>> initSigmaC("GNSSFGO.Initialization.initSigmaC", *this);
     lastOptimizedState_.cbdVar = gtsam::Vector2(initSigmaC.value().data()).asDiagonal();
-    RCLCPP_WARN_STREAM(get_logger(), "cbdVar:" << lastOptimizedState_.cbdVar);
-
-    // ToDo: @haoming, move the imu into the imu integrator Imu parameters
-    utils::RosParameter<bool> imuMessageHasUncertainty("GNSSFGO.imuMessageHasUncertainty", false, *this);
-    paramsPtr_->imuMessageHasUncertainty = imuMessageHasUncertainty.value();
-    RCLCPP_WARN_STREAM(get_logger(),
-                       "imuMessageHasUncertainty:" << (paramsPtr_->imuMessageHasUncertainty ? "true" : "false"));
+    RCLCPP_INFO_STREAM(get_logger(), "cbdVar:" << lastOptimizedState_.cbdVar);
 
     utils::RosParameter<double> accelerometerSigma("GNSSFGO.IMUPreintegrator.accelerometerSigma", 1.0, *this);
     paramsPtr_->accelerometerSigma = accelerometerSigma.value();
-    RCLCPP_WARN_STREAM(get_logger(), "accelerometerSigma:" << paramsPtr_->accelerometerSigma);
 
     utils::RosParameter<double> integrationSigma("GNSSFGO.IMUPreintegrator.integrationSigma", 1.0, *this);
     paramsPtr_->integrationSigma = integrationSigma.value();
-    RCLCPP_WARN_STREAM(get_logger(), "integrationSigma:" << paramsPtr_->integrationSigma);
+    RCLCPP_INFO_STREAM(get_logger(), "integrationSigma:" << paramsPtr_->integrationSigma);
 
     utils::RosParameter<double> gyroscopeSigma("GNSSFGO.IMUPreintegrator.gyroscopeSigma", 1.0, *this);
     paramsPtr_->gyroscopeSigma = gyroscopeSigma.value();
-    RCLCPP_WARN_STREAM(get_logger(), "gyroscopeSigma:" << paramsPtr_->gyroscopeSigma);
+    RCLCPP_INFO_STREAM(get_logger(), "gyroscopeSigma:" << paramsPtr_->gyroscopeSigma);
 
     utils::RosParameter<double> biasAccSigma("GNSSFGO.IMUPreintegrator.biasAccSigma", 4e-4, *this);
     paramsPtr_->biasAccSigma = biasAccSigma.value();
-    RCLCPP_WARN_STREAM(get_logger(), "biasAccSigma:" << paramsPtr_->biasAccSigma);
+    RCLCPP_INFO_STREAM(get_logger(), "biasAccSigma:" << paramsPtr_->biasAccSigma);
 
     utils::RosParameter<double> biasOmegaSigma("GNSSFGO.IMUPreintegrator.biasOmegaSigma", 87e-5, *this);
     paramsPtr_->biasOmegaSigma = biasOmegaSigma.value();
-    RCLCPP_WARN_STREAM(get_logger(), "biasOmegaSigma:" << paramsPtr_->biasOmegaSigma);
+    RCLCPP_INFO_STREAM(get_logger(), "biasOmegaSigma:" << paramsPtr_->biasOmegaSigma);
 
     utils::RosParameter<double> biasAccOmegaInt("GNSSFGO.IMUPreintegrator.biasAccOmegaInt", 87e-5, *this);
     paramsPtr_->biasAccOmegaInt = biasAccOmegaInt.value();
-    RCLCPP_WARN_STREAM(get_logger(), "biasAccOmegaInt:" << paramsPtr_->biasAccOmegaInt);
+    RCLCPP_INFO_STREAM(get_logger(), "biasAccOmegaInt:" << paramsPtr_->biasAccOmegaInt);
 
     utils::RosParameter<int> IMUMeasurementFrequency("GNSSFGO.Graph.IMUMeasurementFrequency", 100, *this);
     paramsPtr_->IMUMeasurementFrequency = IMUMeasurementFrequency.value();
-    RCLCPP_WARN_STREAM(get_logger(), "IMUMeasurementFrequency: " << paramsPtr_->IMUMeasurementFrequency);
+    RCLCPP_INFO_STREAM(get_logger(), "IMUMeasurementFrequency: " << paramsPtr_->IMUMeasurementFrequency);
 
     utils::RosParameter<int> bufferSizeinSec("GNSSFGO.bufferSize", 5, *this);
     paramsPtr_->bufferSize = bufferSizeinSec.value();
     RCLCPP_WARN_STREAM(get_logger(), "bufferSize: " << paramsPtr_->bufferSize);
-
 
     // PARAM: GP Prior
     utils::RosParameter<std::string> gpType("GNSSFGO.Graph.gpType", "WNOA", *this);
@@ -174,38 +153,14 @@ namespace gnss_fgo {
       RCLCPP_WARN_STREAM(get_logger(), "fullGPPrior:" << (paramsPtr_->fullGPPrior ? "true" : "false"));
     }
 
-    // ToDo: @haoming, this deserves a better handling for generalization... Thinking about automatic online calibration processes. calibration param
-    utils::RosParameter<std::vector<double>> lb("GNSSFGO.VehicleParameters.transIMUToGNSSAnt1", *this);
-    paramsPtr_->transIMUToAnt1 = gtsam::Vector3(lb.value().data());
+    utils::RosParameter<bool> useGPPriorFactor("GNSSFGO.Graph.addGPPriorFactor", false, *this);
+    paramsPtr_->addGPPriorFactor = useGPPriorFactor.value();
+    RCLCPP_INFO_STREAM(get_logger(), "addGPPriorFactor:" << (paramsPtr_->addGPPriorFactor ? "true" : "false"));
 
-    utils::RosParameter<std::vector<double>> lb2("GNSSFGO.VehicleParameters.transIMUToGNSSAnt2", *this);
-    paramsPtr_->transIMUToAnt2 = gtsam::Vector3(lb2.value().data());
-
-    utils::RosParameter<std::vector<double>> lb3("GNSSFGO.VehicleParameters.transIMUToReference", *this);
-    paramsPtr_->transIMUToReference = gtsam::Vector3(lb3.value().data());
-
-    utils::RosParameter<std::vector<double>> lbRotRef("GNSSFGO.VehicleParameters.rotIMUToReference", *this);
-    const auto rotRef = lbRotRef.value();
-    paramsPtr_->rotIMUToReference = gtsam::Rot3(rotRef[0], rotRef[1], rotRef[2],
-                                                rotRef[3], rotRef[4], rotRef[5],
-                                                rotRef[6], rotRef[7], rotRef[8]);
-
-    utils::RosParameter<std::vector<double>> lb4("GNSSFGO.VehicleParameters.transIMUToLiDAR", *this);
-    paramsPtr_->transIMUToLiDAR = gtsam::Vector3(lb4.value().data());
-
-    utils::RosParameter<std::vector<double>> lbRotLiDAR("GNSSFGO.VehicleParameters.rotIMUToLiDAR", *this);
-    const auto rotLiDAR = lbRotLiDAR.value();
-    paramsPtr_->rotIMUtoLiDAR = gtsam::Rot3(rotLiDAR[0], rotLiDAR[1], rotLiDAR[2],
-                                            rotLiDAR[3], rotLiDAR[4], rotLiDAR[5],
-                                            rotLiDAR[6], rotLiDAR[7], rotLiDAR[8]);
-
-    std::vector<double> imuRotRaw = {1., 0, 0, 0, 1, 0, 0, 0, 1};
-    utils::RosParameter<std::vector<double>> imuRot("GNSSFGO.VehicleParameters.IMURot", imuRotRaw, *this);
-    const auto imuRot_ = imuRot.value();
-    paramsPtr_->imuRot = gtsam::Rot3(imuRot_[0], imuRot_[1], imuRot_[2],
-                                     imuRot_[3], imuRot_[4], imuRot_[5],
-                                     imuRot_[6], imuRot_[7], imuRot_[8]);
-
+    utils::RosParameter<bool> UseGPInterpolatedFactor("GNSSFGO.Graph.addGPInterpolatedFactor", *this);
+    paramsPtr_->addGPInterpolatedFactor = UseGPInterpolatedFactor.value();
+    RCLCPP_INFO_STREAM(get_logger(),
+                       "addGPInterpolatedFactor: " << (paramsPtr_->addGPInterpolatedFactor ? "true" : "false"));
 
     // PARAM: ROS topic
     utils::RosParameter<bool> pub_pose_vel("GNSSFGO.Publish.pubPoseVel", true, *this);
@@ -260,7 +215,6 @@ namespace gnss_fgo {
       callbackGroupMap_.insert(
         std::make_pair("IMU", this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive)));
 
-
       utils::RosParameter<std::string> imuTopic("GNSSFGO.imuTopic", "/imu/data", *this);
       auto subIMUOpt = rclcpp::SubscriptionOptions();
       subIMUOpt.callback_group = callbackGroupMap_["IMU"];
@@ -271,15 +225,13 @@ namespace gnss_fgo {
                                                                    this->onIMUMsgCb(imuMeasurement);
                                                                  },
                                                                  subIMUOpt);
-
-
       optThread_ = std::make_unique<std::thread>([this]() -> void {
         // If we chose the IMU as the time reference, graph will be extended by counting high-frequent imu measurements
         // otherwise, we use ros time
         if (paramsPtr_->useIMUAsTimeReference)
           this->onTriggerOptimization();
         else
-          this->onlineTimeCentricFGO();
+          this->timeCentricFGO();
       });
 
       initFGOThread_ = std::make_unique<std::thread>([this]() -> void {
@@ -297,7 +249,7 @@ namespace gnss_fgo {
     imuDataBuffer_.resize_buffer(1000 * paramsPtr_->bufferSize);
     fgoPredStateBuffer_.resize_buffer(50);
     fgoOptStateBuffer_.resize_buffer(50);
-    referenceBuffer_.resize_buffer(1000);
+    referenceBuffer_.resize_buffer(100);
     return true;
   }
 
@@ -381,21 +333,15 @@ namespace gnss_fgo {
       std::cout << std::fixed << "init_cbd: " << lastOptimizedState_.cbd << std::endl;
 
       //initialization
-
-      const auto init_imu_pos = foundPVA.xyz_ecef - foundPVA.rot_ecef.rotate(paramsPtr_->transIMUToReference);
-
-      gtsam::Vector3 vecGrav = gtsam::Vector3::Zero();
-      gtsam::Vector3 gravity_b = gtsam::Vector3::Zero();
-      if (paramsPtr_->calibGravity) {
-        vecGrav = /*init_nedRe * */fgo::utils::gravity_ecef(init_imu_pos);
-        gravity_b = foundPVA.rot_ecef.unrotate(vecGrav);
-      }
-
+      static const auto reference_trans = sensorCalibManager_->getTransformationFromBase("reference");
+      const auto init_imu_pos = foundPVA.xyz_ecef - foundPVA.rot_ecef.rotate(reference_trans.translation());
+      const auto vecGrav = /*init_nedRe * */fgo::utils::gravity_ecef(init_imu_pos);
+      const auto gravity_b = foundPVA.rot_ecef.unrotate(vecGrav);
       lastOptimizedState_.omega = this_imu.gyro;
       lastOptimizedState_.accMeasured = (gtsam::Vector6() << this_imu.accRot, this_imu.accLin + gravity_b).finished();
 
       const auto init_imu_vel = foundPVA.vel_ecef + foundPVA.rot_ecef.rotate(
-        gtsam::skewSymmetric(paramsPtr_->transIMUToReference) * this_imu.gyro);
+        gtsam::skewSymmetric(reference_trans.translation()) * this_imu.gyro);
       lastOptimizedState_.state = gtsam::NavState(foundPVA.rot_ecef,
                                                   init_imu_pos,
                                                   init_imu_vel);
@@ -433,7 +379,7 @@ namespace gnss_fgo {
       fgoOptStateBuffer_.update_buffer(currentPredState_, initTime, this->get_clock()->now());
       fgoStateOptPub_->publish(this->convertFGOStateToMsg(lastOptimizedState_));
       fgoStateOptNavFixPub_->publish(
-        this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp, true));
+        this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp, reference_trans.translation()));
       RCLCPP_INFO_STREAM(this->get_logger(),
                          "(Re-)Initializing FGO current imu data size before cleaning: " << imuDataBuffer_.size());
 
@@ -450,10 +396,11 @@ namespace gnss_fgo {
   }
 
   void GNSSFGOLocalizationBase::onIMUMsgCb(const sensor_msgs::msg::Imu::ConstSharedPtr &imuMeasurement) {
+    static const auto transIMUFromBase = sensorCalibManager_->getTransformationFromBase("imu");
+    static const auto reference_trans = sensorCalibManager_->getTransformationFromBase("reference");
     static rclcpp::Time lastIMUTime{0, 0, RCL_ROS_TIME};
     static gtsam::Vector3 lastGyro{};
     static uint notifyCounter = paramsPtr_->IMUMeasurementFrequency / paramsPtr_->optFrequency;
-    static double imuBetweenTime = 1. / paramsPtr_->IMUMeasurementFrequency;
 
     auto start_time = std::chrono::system_clock::now();
 
@@ -487,13 +434,11 @@ namespace gnss_fgo {
 
     fgoIMUMeasurement.accLin = (gtsam::Vector3()
       << imuMeasurement->linear_acceleration.x, imuMeasurement->linear_acceleration.y, imuMeasurement->linear_acceleration.z).finished(); //acc
-    fgoIMUMeasurement.accLin = paramsPtr_->imuRot.rotate(fgoIMUMeasurement.accLin);
-
-
+    fgoIMUMeasurement.accLin = transIMUFromBase.rotation().rotate(fgoIMUMeasurement.accLin);
     fgoIMUMeasurement.accLinCov = gtsam::Matrix33(imuMeasurement->linear_acceleration_covariance.data());
     fgoIMUMeasurement.gyro = (gtsam::Vector3()
       << imuMeasurement->angular_velocity.x, imuMeasurement->angular_velocity.y, imuMeasurement->angular_velocity.z).finished(); //angular vel
-    fgoIMUMeasurement.gyro = paramsPtr_->imuRot.rotate(fgoIMUMeasurement.gyro);
+    fgoIMUMeasurement.gyro = transIMUFromBase.rotation().rotate(fgoIMUMeasurement.gyro);
     fgoIMUMeasurement.gyroCov = gtsam::Matrix33(imuMeasurement->angular_velocity_covariance.data());
     //ORIENTATION ALWAYS 0,0,0,1
     fgoIMUMeasurement.AHRSOri = gtsam::Quaternion(imuMeasurement->orientation.w,
@@ -504,14 +449,11 @@ namespace gnss_fgo {
 
     if (!lastIMUTime.nanoseconds()) // we got first measurement
     {
-      fgoIMUMeasurement.dt = imuBetweenTime;
+      fgoIMUMeasurement.dt = 1. / paramsPtr_->IMUMeasurementFrequency;
       // calculate the angular acceleration
       fgoIMUMeasurement.accRot = gtsam::Vector3();
     } else {
       fgoIMUMeasurement.dt = fgoIMUMeasurement.timestamp.seconds() - lastIMUTime.seconds();
-      if (fgoIMUMeasurement.dt < imuBetweenTime)
-        fgoIMUMeasurement.dt = imuBetweenTime;
-
       fgoIMUMeasurement.accRot = (fgoIMUMeasurement.gyro - lastGyro) / fgoIMUMeasurement.dt;
     }
     imuDataBuffer_.update_buffer(fgoIMUMeasurement, fgoIMUMeasurement.timestamp, this->get_clock()->now());
@@ -542,19 +484,16 @@ namespace gnss_fgo {
       }
     }
 
-    gtsam::Vector3 gravity_b = gtsam::Vector3::Zero();
-    if (paramsPtr_->calibGravity) {
-      const auto gravity = fgo::utils::gravity_ecef(currentPredState_.state.position());
-      gravity_b = currentPredState_.state.attitude().unrotate(gravity);
-    }
+    const auto gravity = fgo::utils::gravity_ecef(currentPredState_.state.position());
+    const auto gravity_b = currentPredState_.state.attitude().unrotate(gravity);
 
     currentPredState_.mutex.lock();
     currentPredState_.timestamp = fgoIMUMeasurement.timestamp;
     currentPredState_.omega = currentPredState_.imuBias.correctGyroscope(fgoIMUMeasurement.gyro);
     currentPredState_.cbd = (gtsam::Matrix22() << 1, fgoIMUMeasurement.dt, 0, 1).finished() * currentPredState_.cbd;
-
     currentPredState_.accMeasured = (gtsam::Vector6()
-      << fgoIMUMeasurement.accRot, (fgoIMUMeasurement.accLin + gravity_b)).finished();
+      << fgoIMUMeasurement.accRot, currentPredState_.imuBias.correctAccelerometer(
+      fgoIMUMeasurement.accLin + gravity_b)).finished();
 
     if (isDoingPropagation_) {
       currentIMUPreIntMutex_.lock();
@@ -570,18 +509,20 @@ namespace gnss_fgo {
       // currentPredState_.timestamp += rclcpp::Duration::from_nanoseconds(fgoIMUMeasurement.dt * fgo::constants::sec2nanosec);
       currentPredState_.state = new_state;
     }
-
     currentPredState_.mutex.unlock();
     graph_->updatePredictedBuffer(currentPredState_);
     fgoPredStateBuffer_.update_buffer(currentPredState_, fgoIMUMeasurement.timestamp, this->get_clock()->now());
-    const auto FGOStateMsg = this->convertFGOStateToMsg(currentPredState_);
-    fgo::data::UserEstimation_T userEstimation = {FGOStateMsg.llh_ant_main[0], FGOStateMsg.llh_ant_main[1],
-                                                  FGOStateMsg.llh_ant_main[2], FGOStateMsg.cbd[0],
-                                                  FGOStateMsg.llh_ant_aux[0], FGOStateMsg.llh_ant_aux[1],
-                                                  FGOStateMsg.llh_ant_aux[2]};
+    const auto FGOStateMsg = gnss_fgo::GNSSFGOLocalizationBase::convertFGOStateToMsg(currentPredState_);
+
+    // ToDo @haoming, the following looks ugly.
+    const auto navfixMsgRef = convertPositionToNavFixMsg(currentPredState_.state, currentPredState_.timestamp, reference_trans.translation());
+    const std::array<double, 2> llh_rad = {navfixMsgRef.latitude * fgo::constants::deg2rad, navfixMsgRef.longitude * fgo::constants::deg2rad};
+    fgo::data::UserEstimation_T userEstimation = {llh_rad[0], llh_rad[1],
+                                                  navfixMsgRef.altitude, FGOStateMsg.cbd[0],
+                                                  0., 0., 0.};
     fgoStatePredPub_->publish(FGOStateMsg);
     userEstimationBuffer_.update_buffer(userEstimation, fgoIMUMeasurement.timestamp);
-    fgoStatePredNavFixPub_->publish(convertPositionToNavFixMsg(FGOStateMsg, true));
+    fgoStatePredNavFixPub_->publish(navfixMsgRef);
 
     if (this->isStateInited_ && !paramsPtr_->calcErrorOnOpt) {
       calculateErrorOnState(currentPredState_);
@@ -597,13 +538,10 @@ namespace gnss_fgo {
     }
   }
 
-  void GNSSFGOLocalizationBase::onlineTimeCentricFGO() {
-    // ToDo @haoming: we need to kick the imu out of this function. The IMU should be seen as a sensor integrator
-    // instead of being in the graph even it can be used as a timing reference
+  void GNSSFGOLocalizationBase::timeCentricFGO() {
     RCLCPP_INFO(this->get_logger(), "Time centric graph optimization started in a different Thread... ");
     while (rclcpp::ok()) {
       static const double betweenOptimizationTime = 1. / paramsPtr_->optFrequency;
-      static const double betweenStateTime = 1. / paramsPtr_->stateFrequency;
       static auto lastNotInitializedTimestamp = std::chrono::system_clock::now();
       static double lastGraphTimestamp = 0;
       static auto firstRun = true;
@@ -659,12 +597,12 @@ namespace gnss_fgo {
         // we plan the state timestamps for the next graph extension
         std::vector<double> newStateTimestamps;
 
-        while (timeDiff >= betweenStateTime) {
-          lastGraphTimestamp += betweenStateTime;
+        while (timeDiff >= betweenOptimizationTime) {
+          lastGraphTimestamp += betweenOptimizationTime;
           RCLCPP_WARN_STREAM(this->get_logger(),
                              "Time-Centric Graph: create state at " << std::fixed << lastGraphTimestamp);
           newStateTimestamps.emplace_back(lastGraphTimestamp);
-          timeDiff -= betweenStateTime;
+          timeDiff -= betweenOptimizationTime;
         }
 
         RCLCPP_WARN_STREAM(this->get_logger(),
@@ -675,7 +613,7 @@ namespace gnss_fgo {
         const auto constructGraphStatus = graph_->constructFactorGraphOnTime(newStateTimestamps, imuData);
 
         if (constructGraphStatus == fgo::graph::StatusGraphConstruction::FAILED) {
-          throw std::invalid_argument("Factor Graph Construction failed");
+          throw std::invalid_argument("FGC failed");
         }
 
         double timeCFG = std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -760,13 +698,13 @@ namespace gnss_fgo {
   }
 
   double GNSSFGOLocalizationBase::optimize() {
+    static const auto reference_trans = sensorCalibManager_->getTransformationFromBase("reference");
     fgo::data::State newOptState;
-
     double optTime = graph_->optimize(newOptState);
     fgoOptStateBuffer_.update_buffer(newOptState, newOptState.timestamp);
     auto fgoStateMsg = this->convertFGOStateToMsg(newOptState);
     fgoStateOptPub_->publish(fgoStateMsg);
-    fgoStateOptNavFixPub_->publish(convertPositionToNavFixMsg(fgoStateMsg, true));
+    fgoStateOptNavFixPub_->publish(convertPositionToNavFixMsg(newOptState.state, newOptState.timestamp, reference_trans.translation()));
 
     lastOptimizedState_.mutex.lock();
     lastOptimizedState_ = newOptState;
@@ -774,15 +712,11 @@ namespace gnss_fgo {
 
     std::vector<fgo::data::IMUMeasurement> dataIMU = imuDataBuffer_.get_all_buffer();
     auto restIMUData = graph_->getRestIMUData();
+
     currentIMUPreIntMutex_.lock();
     // Because the optimization took sometime, after the optimization, we again need to get the imu measurements, which are received while optimizing
-
-    //if(paramsPtr_->calibGravity)
-    {
-      preIntegratorParams_->n_gravity = /*fgo::utils::nedRe_Matrix(lastOptimizedState_.state.position()) * */
-        fgo::utils::gravity_ecef(newOptState.state.position());
-    }
-
+    preIntegratorParams_->n_gravity = /*fgo::utils::nedRe_Matrix(lastOptimizedState_.state.position()) * */
+      fgo::utils::gravity_ecef(newOptState.state.position());
     currentIMUPreintegrator_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(preIntegratorParams_,
                                                                                           newOptState.imuBias);
     //first measurement only needs to be integrated from state to next meas
@@ -825,191 +759,176 @@ namespace gnss_fgo {
     if (this->isStateInited_ && paramsPtr_->calcErrorOnOpt) {
       calculateErrorOnState(newOptState);
     }
+
     return optTime;
   }
 
   void GNSSFGOLocalizationBase::calculateErrorOnState(const fgo::data::State &stateIn) {
-    static const auto l_b_ant_main = paramsPtr_->transIMUToReference;
+    static const auto reference_trans = sensorCalibManager_->getTransformationFromBase("reference");
     static std::vector<fgo::data::State> stateCached;
 
     //auto labelBuffer = gnssLabelingMsgBuffer_.get_all_buffer();
 
     auto pvaBuffer = referenceBuffer_.get_all_buffer();
+    const auto lastPVTTime = pvaBuffer.back().timestamp.seconds();
+    stateCached.emplace_back(stateIn);
 
-    try {
-      stateCached.emplace_back(stateIn);
-      if (pvaBuffer.size() < 3) {
-        RCLCPP_ERROR_STREAM(this->get_logger(), "ERROR: NO ENOUGH PVA Data, returning");
-        return;
-      }
+    auto stateIter = stateCached.begin();
+    while (stateIter != stateCached.end()) {
+      double stateTime = stateIter->timestamp.seconds();
+      auto stateTimeNanoSec = stateIter->timestamp.nanoseconds();
+      if (stateTime < lastPVTTime) {
+        // data is sorted
 
-      const auto lastPVTTime = pvaBuffer.back().timestamp.seconds();
-      const auto firstPVTTime = pvaBuffer.front().timestamp.seconds();
-      auto stateIter = stateCached.begin();
-      while (stateIter != stateCached.end()) {
-        double stateTime = stateIter->timestamp.seconds();
-        auto stateTimeNanoSec = stateIter->timestamp.nanoseconds();
+        auto itAfter = std::lower_bound(pvaBuffer.begin(), pvaBuffer.end(), stateTime,
+                                        [](const fgo::data::PVASolution &pva, double timestamp) -> bool {
+                                          // true, ... true, true, false(HERE), false, ... false
+                                          return pva.timestamp.seconds() < timestamp;
+                                        });
+        auto itBefore = itAfter - 1;
 
-        if (stateTime < firstPVTTime) {
-          RCLCPP_ERROR_STREAM(this->get_logger(),
-                              "ERROR: state timestamp in front of first reference timestamp. Considering enlarge data!");
-          continue;
-        }
+        //RCLCPP_ERROR_STREAM(this->get_logger(), "ERROR: PVT before: " << std::fixed << itBefore->timestamp);
+        //RCLCPP_ERROR_STREAM(this->get_logger(), "ERROR: state : " << std::fixed << stateTime);
+        //RCLCPP_ERROR_STREAM(this->get_logger(), "ERROR: PVT before: " << std::fixed << itAfter->timestamp);
 
-        if (stateTime < lastPVTTime) {
-          // data is sorted
 
-          auto itAfter = std::lower_bound(pvaBuffer.begin(), pvaBuffer.end(), stateTime,
-                                          [](const fgo::data::PVASolution &pva, double timestamp) -> bool {
-                                            // true, ... true, true, false(HERE), false, ... false
-                                            return pva.timestamp.seconds() < timestamp;
-                                          });
-          auto itBefore = itAfter - 1;
+        const auto coeff =
+          (stateTime - itBefore->timestamp.seconds()) / (itAfter->timestamp - itBefore->timestamp).seconds();
+        const double tiffDiff = stateTime - itBefore->timestamp.seconds();
 
-          //std::cout << "################################################" << std::endl;
-          //std::cout << itAfter - pvaBuffer.begin() << std::endl;
+        //RCLCPP_ERROR_STREAM(this->get_logger(), "ERROR: PVT scale: " << std::fixed << coeff);
 
-          const auto coeff =
-            (stateTime - itBefore->timestamp.seconds()) / (itAfter->timestamp - itBefore->timestamp).seconds();
-          const double tiffDiff = stateTime - itBefore->timestamp.seconds();
+        //const auto pvt_phi = gtsam::interpolate(itBefore->phi, itAfter->phi, coeff);
+        const auto ref_pos_llh_std = gtsam::interpolate(itBefore->xyz_var, itAfter->xyz_var, coeff).cwiseSqrt();
 
-          const auto ref_pos_llh_std = gtsam::interpolate(itBefore->xyz_var, itAfter->xyz_var, coeff).cwiseSqrt();
-          const auto pva_yaw = gtsam::interpolate(itBefore->heading, itAfter->heading, coeff);
-          const auto pva_yaw_std = gtsam::interpolate(sqrt(itBefore->heading_var), sqrt(itAfter->heading_var), coeff);
-          const auto pva_cog = gtsam::interpolate(itBefore->cog, itAfter->cog, coeff);
-          const auto pva_tow = gtsam::interpolate(itBefore->tow, itAfter->tow, coeff);
-          const auto pva_clock_bias = gtsam::interpolate(itBefore->clock_bias, itAfter->clock_bias, coeff);
-          const auto pva_clock_dirft = gtsam::interpolate(itBefore->clock_drift, itAfter->clock_drift, coeff);
-          const auto ref_vel_ned = gtsam::interpolate(itBefore->vel_n, itAfter->vel_n, coeff);
-          const auto ref_pos_llh = fgo::utils::WGS84InterpolationLLH(itBefore->llh,
-                                                                     itAfter->llh,
-                                                                     coeff);
+        const auto pva_yaw = gtsam::interpolate(itBefore->heading, itAfter->heading, coeff) * fgo::constants::rad2deg;
+        const auto pva_yaw_std = gtsam::interpolate(sqrt(itBefore->heading_var), sqrt(itAfter->heading_var), coeff);
+        const auto pva_cog = gtsam::interpolate(itBefore->cog, itAfter->cog, coeff);
+        const auto pva_tow = gtsam::interpolate(itBefore->tow, itAfter->tow, coeff);
+        const auto pva_clock_bias = gtsam::interpolate(itBefore->clock_bias, itAfter->clock_bias, coeff);
+        const auto pva_clock_dirft = gtsam::interpolate(itBefore->clock_drift, itAfter->clock_drift, coeff);
+        const auto ref_vel_ned = gtsam::interpolate(itBefore->vel_n, itAfter->vel_n, coeff);
 
-          sensor_msgs::msg::NavSatFix pvtMsg;
-          pvtMsg.header.stamp = stateIter->timestamp;
-          pvtMsg.altitude = ref_pos_llh.z();
-          pvtMsg.latitude = ref_pos_llh.x() * fgo::constants::rad2deg;
-          pvtMsg.longitude = ref_pos_llh.y() * fgo::constants::rad2deg;
-          pvtInterpolatedPub_->publish(pvtMsg);
+        const auto ref_pos_llh = fgo::utils::WGS84InterpolationLLH(itBefore->llh,
+                                                                   itAfter->llh,
+                                                                   coeff);
 
-          irt_nav_msgs::msg::Error2GT error2Gt;
+        sensor_msgs::msg::NavSatFix pvtMsg;
+        pvtMsg.header.stamp = stateIter->timestamp;
+        pvtMsg.altitude = ref_pos_llh.z();
+        pvtMsg.latitude = ref_pos_llh.x() * fgo::constants::rad2deg;
+        pvtMsg.longitude = ref_pos_llh.y() * fgo::constants::rad2deg;
+        pvtInterpolatedPub_->publish(pvtMsg);
 
-          const gtsam::Vector2 ref_cbd(pva_clock_bias, pva_clock_dirft);
+        irt_nav_msgs::msg::Error2GT error2Gt;
 
-          const auto &fgo_pos_ecef = stateIter->state.position();
-          const auto &fgo_ori_ecef = stateIter->state.attitude();
-          const auto &fgo_omega = stateIter->omega;
-          const auto &fgo_bias = stateIter->imuBias;
-          const auto &fgo_cbd = stateIter->cbd;
-          const auto &fgo_vel_ecef = stateIter->state.v();
-          const auto fgo_pose_ecef_std = stateIter->poseVar.diagonal().cwiseSqrt();
-          const auto fgo_vel_ecef_std = stateIter->velVar.diagonal().cwiseSqrt();
-          const auto fgo_omega_std = stateIter->omegaVar.diagonal().cwiseSqrt();
-          const auto fgo_cbd_std = stateIter->cbdVar.diagonal().cwiseSqrt();
-          const auto fgo_bias_std = stateIter->imuBiasVar.diagonal().cwiseSqrt();
-          const auto pos_ant_main_ecef = fgo_pos_ecef + fgo_ori_ecef.rotate(l_b_ant_main);
-          const auto pos_ant_llh = fgo::utils::xyz2llh(pos_ant_main_ecef);
-          const auto pos_ant_llh_inter = fgo::utils::xyz2llh_interative(pos_ant_main_ecef);
-          const gtsam::Rot3 nRe(fgo::utils::nedRe_Matrix(pos_ant_main_ecef));
-          const auto fgo_pose_std_ned = (gtsam::Vector6()
-            << nRe.rotate(fgo_pose_ecef_std.block<3, 1>(0, 0)), nRe.rotate(
-            fgo_pose_ecef_std.block<3, 1>(3, 0))).finished();
-          const auto fgo_vel_ned = nRe.rotate(
-            fgo_vel_ecef + fgo_ori_ecef.rotate(gtsam::skewSymmetric((-l_b_ant_main)) * fgo_omega));
-          const auto fgo_vel_ned_std = nRe.rotate(fgo_vel_ecef_std);
-          const auto nRb_rpy = fgo::utils::func_DCM2EulerAngles((nRe.compose(fgo_ori_ecef)).matrix());
+        const gtsam::Vector2 ref_cbd(pva_clock_bias, pva_clock_dirft);
 
-          auto fgo_yaw = nRb_rpy(2) * 180. / M_PI;
-          fgo_yaw = (fgo_yaw >= 0. ? fgo_yaw : (fgo_yaw + 360.));
-          const auto fgo_pitch = nRb_rpy(1) * 180. / M_PI;
-          const auto fgo_roll = nRb_rpy(0) * 180. / M_PI;
+        const auto &fgo_pos_ecef = stateIter->state.position();
+        const auto &fgo_ori_ecef = stateIter->state.attitude();
+        const auto &fgo_omega = stateIter->omega;
+        const auto &fgo_bias = stateIter->imuBias;
+        const auto &fgo_cbd = stateIter->cbd;
+        const auto &fgo_vel_ecef = stateIter->state.v();
+        const auto fgo_pose_ecef_std = stateIter->poseVar.diagonal().cwiseSqrt();
+        const auto fgo_vel_ecef_std = stateIter->velVar.diagonal().cwiseSqrt();
+        const auto fgo_omega_std = stateIter->omegaVar.diagonal().cwiseSqrt();
+        const auto fgo_cbd_std = stateIter->cbdVar.diagonal().cwiseSqrt();
+        const auto fgo_bias_std = stateIter->imuBiasVar.diagonal().cwiseSqrt();
 
-          const auto ref_pos_ecef = fgo::utils::llh2xyz(ref_pos_llh);
-          const gtsam::Rot3 nReGT(fgo::utils::nedRe_Matrix_asLLH(ref_pos_llh));
+        const auto pos_ant_main_ecef = fgo_pos_ecef + fgo_ori_ecef.rotate(reference_trans.translation());
+        const auto pos_ant_llh = fgo::utils::xyz2llh(pos_ant_main_ecef);
+        const gtsam::Rot3 nRe(fgo::utils::nedRe_Matrix(pos_ant_main_ecef));
+        const auto fgo_pose_std_ned = (gtsam::Vector6() << nRe.rotate(fgo_pose_ecef_std.block<3, 1>(0, 0)), nRe.rotate(
+          fgo_pose_ecef_std.block<3, 1>(3, 0))).finished();
+        const auto fgo_vel_ned = nRe.rotate(
+          fgo_vel_ecef + fgo_ori_ecef.rotate(gtsam::skewSymmetric((-reference_trans.translation())) * fgo_omega));
+        const auto fgo_vel_ned_std = nRe.rotate(fgo_vel_ecef_std);
+        const auto nRb_rpy = fgo::utils::func_DCM2EulerAngles((nRe.compose(fgo_ori_ecef)).matrix());
 
-          fgo::utils::eigenMatrix2stdVector(ref_pos_llh, error2Gt.ref_llh);
-          fgo::utils::eigenMatrix2stdVector(ref_pos_llh_std, error2Gt.ref_llh_std);
-          fgo::utils::eigenMatrix2stdVector(fgo_pose_ecef_std, error2Gt.pose_std_ecef);
-          fgo::utils::eigenMatrix2stdVector(fgo_pose_std_ned, error2Gt.pose_std_ned);
-          fgo::utils::eigenMatrix2stdVector(fgo_vel_ecef_std, error2Gt.vel_std_ecef);
-          fgo::utils::eigenMatrix2stdVector(fgo_vel_ned_std, error2Gt.vel_std_ned);
-          fgo::utils::eigenMatrix2stdVector(fgo_cbd, error2Gt.cbd);
-          fgo::utils::eigenMatrix2stdVector(fgo_cbd_std, error2Gt.cbd_std);
-          fgo::utils::eigenMatrix2stdVector(ref_cbd, error2Gt.ref_cbd);
-          fgo::utils::eigenMatrix2stdVector(fgo_vel_ned, error2Gt.vel_ned);
-          fgo::utils::eigenMatrix2stdVector(ref_vel_ned, error2Gt.ref_vel);
-          fgo::utils::eigenMatrix2stdVector(fgo_bias.accelerometer(), error2Gt.acc_bias);
-          fgo::utils::eigenMatrix2stdVector(fgo_bias.gyroscope(), error2Gt.gyro_bias);
-          fgo::utils::eigenMatrix2stdVector(fgo_bias_std.head(3), error2Gt.acc_bias_std);
-          fgo::utils::eigenMatrix2stdVector(fgo_bias_std.tail(3), error2Gt.gyro_bias_std);
-          fgo::utils::eigenMatrix2stdVector(fgo_omega, error2Gt.omega_body);
-          fgo::utils::eigenMatrix2stdVector(fgo_omega_std, error2Gt.omega_body_std);
+        auto fgo_yaw = nRb_rpy(2) * 180. / M_PI;
+        fgo_yaw = (fgo_yaw >= 0. ? fgo_yaw : (fgo_yaw + 360.));
+        const auto fgo_pitch = nRb_rpy(1) * 180. / M_PI;
+        const auto fgo_roll = nRb_rpy(0) * 180. / M_PI;
 
-          if (itAfter->type == fgo::data::GNSSSolutionType::RTKFIX) {
-            const auto pos_diff_ecef = pos_ant_main_ecef - ref_pos_ecef;
-            const auto pos_error_ned = nRe.rotate(pos_diff_ecef);//
-            const auto pos_error_body = fgo_ori_ecef.unrotate(pos_diff_ecef);
-            const auto vel_error_ned = fgo_vel_ned - ref_vel_ned;
+        const auto ref_pos_ecef = fgo::utils::llh2xyz(ref_pos_llh);
+        const gtsam::Rot3 nReGT(fgo::utils::nedRe_Matrix_asLLH(ref_pos_llh));
 
-            const GeographicLib::Geodesic &geod = GeographicLib::Geodesic::WGS84();
-            double dist;
-            geod.Inverse(ref_pos_llh.x() * fgo::constants::rad2deg, ref_pos_llh.y() * fgo::constants::rad2deg,
-                         pos_ant_llh.x() * fgo::constants::rad2deg, pos_ant_llh.y() * fgo::constants::rad2deg, dist);
+        fgo::utils::eigenMatrix2stdVector(ref_pos_llh, error2Gt.ref_llh);
+        fgo::utils::eigenMatrix2stdVector(ref_pos_llh_std, error2Gt.ref_llh_std);
+        fgo::utils::eigenMatrix2stdVector(fgo_pose_ecef_std, error2Gt.pose_std_ecef);
+        fgo::utils::eigenMatrix2stdVector(fgo_pose_std_ned, error2Gt.pose_std_ned);
+        fgo::utils::eigenMatrix2stdVector(fgo_vel_ecef_std, error2Gt.vel_std_ecef);
+        fgo::utils::eigenMatrix2stdVector(fgo_vel_ned_std, error2Gt.vel_std_ned);
+        fgo::utils::eigenMatrix2stdVector(fgo_cbd, error2Gt.cbd);
+        fgo::utils::eigenMatrix2stdVector(fgo_cbd_std, error2Gt.cbd_std);
+        fgo::utils::eigenMatrix2stdVector(ref_cbd, error2Gt.ref_cbd);
+        fgo::utils::eigenMatrix2stdVector(fgo_vel_ned, error2Gt.vel_ned);
+        fgo::utils::eigenMatrix2stdVector(ref_vel_ned, error2Gt.ref_vel);
+        fgo::utils::eigenMatrix2stdVector(fgo_bias.accelerometer(), error2Gt.acc_bias);
+        fgo::utils::eigenMatrix2stdVector(fgo_bias.gyroscope(), error2Gt.gyro_bias);
+        fgo::utils::eigenMatrix2stdVector(fgo_bias_std.head(3), error2Gt.acc_bias_std);
+        fgo::utils::eigenMatrix2stdVector(fgo_bias_std.tail(3), error2Gt.gyro_bias_std);
+        fgo::utils::eigenMatrix2stdVector(fgo_omega, error2Gt.omega_body);
+        fgo::utils::eigenMatrix2stdVector(fgo_omega_std, error2Gt.omega_body_std);
 
-            error2Gt.pos_2d_error_geographic = dist;
-            error2Gt.pos_3d_error_geographic = std::sqrt(
-              dist * dist + std::pow((ref_pos_llh.z() - pos_ant_llh.z()), 2));
-            error2Gt.pos_1d_error_ned = abs(pos_error_ned(1));//fgo_ori.unrotate(pos_error_ecef)(1)
-            error2Gt.pos_2d_error_ned = (pos_error_ned).block<2, 1>(0, 0).norm();
-            error2Gt.pos_3d_error_ned = pos_error_ned.norm();
-            error2Gt.pos_1d_error_body = abs(pos_error_body(1));
-            error2Gt.pos_2d_error_body = (pos_error_body).block<2, 1>(0, 0).norm();
-            error2Gt.pos_3d_error_body = pos_error_body.norm();
-            error2Gt.pos_2d_error_ecef = (pos_diff_ecef).block<2, 1>(0, 0).norm();
-            error2Gt.pos_3d_error_ecef = pos_diff_ecef.norm();
-            error2Gt.vel_2d_error = vel_error_ned.block<2, 1>(0, 0).norm();
-            error2Gt.vel_3d_error = vel_error_ned.norm();
+        if (itAfter->type == fgo::data::GNSSSolutionType::RTKFIX) {
+          const auto pos_diff_ecef = pos_ant_main_ecef - ref_pos_ecef;
+          const auto pos_error_ned = nRe.rotate(pos_diff_ecef);//
+          const auto pos_error_body = fgo_ori_ecef.unrotate(pos_diff_ecef);
+          const auto vel_error_ned = fgo_vel_ned - ref_vel_ned;
 
-            if ((pva_yaw == 270. && pva_yaw == 0.) || pva_yaw_std > 30.)
-              error2Gt.yaw_error = std::numeric_limits<double>::max();
-            else {
-              double yaw_error = fgo_yaw - pva_yaw;
-              while (yaw_error > 180.0 || yaw_error < -180.0) {
-                if (yaw_error > 180.0)
-                  yaw_error -= 360.0;
-                if (yaw_error < -180.0)
-                  yaw_error += 360.0;
-              }
-              yaw_error = abs(yaw_error);
-              error2Gt.yaw_error = yaw_error;
+          const GeographicLib::Geodesic &geod = GeographicLib::Geodesic::WGS84();
+          double dist;
+          geod.Inverse(ref_pos_llh.x() * fgo::constants::rad2deg, ref_pos_llh.y() * fgo::constants::rad2deg,
+                       pos_ant_llh.x() * fgo::constants::rad2deg, pos_ant_llh.y() * fgo::constants::rad2deg, dist);
+
+          error2Gt.pos_2d_error_geographic = dist;
+          error2Gt.pos_3d_error_geographic = std::sqrt(dist * dist + std::pow((ref_pos_llh.z() - pos_ant_llh.z()), 2));
+          error2Gt.pos_1d_error_ned = abs(pos_error_ned(1));//fgo_ori.unrotate(pos_error_ecef)(1)
+          error2Gt.pos_2d_error_ned = (pos_error_ned).block<2, 1>(0, 0).norm();
+          error2Gt.pos_3d_error_ned = pos_error_ned.norm();
+          error2Gt.pos_1d_error_body = abs(pos_error_body(1));
+          error2Gt.pos_2d_error_body = (pos_error_body).block<2, 1>(0, 0).norm();
+          error2Gt.pos_3d_error_body = pos_error_body.norm();
+          error2Gt.pos_2d_error_ecef = (pos_diff_ecef).block<2, 1>(0, 0).norm();
+          error2Gt.pos_3d_error_ecef = pos_diff_ecef.norm();
+          error2Gt.vel_2d_error = vel_error_ned.block<2, 1>(0, 0).norm();
+          error2Gt.vel_3d_error = vel_error_ned.norm();
+
+          if ((pva_yaw == 270. && pva_yaw == 0.) || pva_yaw_std > 30.)
+            error2Gt.yaw_error = std::numeric_limits<double>::max();
+          else {
+            double yaw_error = fgo_yaw - pva_yaw;
+            while (yaw_error > 180.0 || yaw_error < -180.0) {
+              if (yaw_error > 180.0)
+                yaw_error -= 360.0;
+              if (yaw_error < -180.0)
+                yaw_error += 360.0;
             }
+            yaw_error = abs(yaw_error);
+            error2Gt.yaw_error = yaw_error;
           }
-          error2Gt.tow = pva_tow;
-          error2Gt.ref_tow_before = itBefore->tow;
-          error2Gt.ref_tow_after = itAfter->tow;
-          error2Gt.ref_error = itAfter->error;
-          error2Gt.ref_mode = itAfter->type;
-          error2Gt.yaw = fgo_yaw;
-          error2Gt.ref_yaw = pva_yaw;
-          error2Gt.ref_yaw_std = pva_yaw_std;
-          error2Gt.pitch = fgo_pitch;
-          error2Gt.roll = fgo_roll;
-          error2Gt.ref_pitch_roll = itAfter->roll_pitch;
-          error2Gt.ref_pitch_roll_std = sqrt(itAfter->roll_pitch_var);
-          error2Gt.header.stamp = stateIter->timestamp;
-
-          pvtErrorPub_->publish(error2Gt);
-
-          stateIter = stateCached.erase(stateIter);
-          continue;
         }
-        stateIter++;
-      }
-    }
-    catch (std::exception &ex) {
+        error2Gt.tow = pva_tow;
+        error2Gt.ref_tow_before = itBefore->tow;
+        error2Gt.ref_tow_after = itAfter->tow;
+        error2Gt.ref_error = itAfter->error;
+        error2Gt.ref_mode = itAfter->type;
+        error2Gt.yaw = fgo_yaw;
+        error2Gt.ref_yaw = pva_yaw;
+        error2Gt.ref_yaw_std = pva_yaw_std;
+        error2Gt.pitch = fgo_pitch;
+        error2Gt.roll = fgo_roll;
+        error2Gt.ref_pitch_roll = itAfter->roll_pitch;
+        error2Gt.ref_pitch_roll_std = sqrt(itAfter->roll_pitch_var);
+        error2Gt.header.stamp = stateIter->timestamp;
+        pvtErrorPub_->publish(error2Gt);
 
-      std::cout << ex.what() << std::endl;
-      RCLCPP_ERROR_STREAM(this->get_logger(), "ERROR: " << ex.what());
+        stateIter = stateCached.erase(stateIter);
+        continue;
+      }
+      stateIter++;
     }
   }
 

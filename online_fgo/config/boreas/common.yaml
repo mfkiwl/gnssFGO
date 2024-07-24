@@ -4,13 +4,14 @@
     use_sim_time: true
     GNSSFGO:
       verbose: false
-      useIMUAsTimeReference: false
+      useIMUAsTimeReference: true
       bufferSize: 10
       optFrequency: 10 #in Hz
+      stateFrequency: 10
       calcErrorOnOpt: true
       cleanIMUonInit: true    # set this flag to clean the imu data before the timestamp of the initializing state
       useHeaderTimestamp: true
-      IMUTopic: "/boreas/imu/data"
+      imuTopic: "/boreas/imu/data"
       calibGravity: false
       #pubPoseVel: true
       #pubFGOState: true
@@ -38,15 +39,15 @@
         addGPPriorFactor: true
         gpType: 'WNOJ'  # 'WNOA'
         addGPInterpolatedFactor: true
-        useEstimatedVarianceAfterInit: false
+        addEstimatedVarianceAfterInit: false
 
         AutoDiffNormalFactor: true
         AutoDiffGPInterpolatedFactor: true
         AutoDiffGPMotionPriorFactor: false
         GPInterpolatedFactorCalcJacobian: true
 
-        StateMeasSyncUpperBound: 0.03
-        StateMeasSyncLowerBound: -0.03
+        StateMeasSyncUpperBound: 0.02
+        StateMeasSyncLowerBound: -0.02
         addMMFactor: false
         addConstDriftFactor: false
 
@@ -63,25 +64,7 @@
         VoteNearZeroVelocity: 0.7 # 20%
         NoOptimizationAfterStates: 100
 
-      VehicleParameters:
-        IMURot: [ 0., 1., 0., 1., 0., 0., 0., 0., -1. ]
-        #IMURot: [1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-        transIMUToReference: [ 0., 0., 0. ] # [0.0, 0.0, 0.0]
-        rotIMUToReference: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-        #rotIMUToReference: [0., -1., 0., 1., 0., 0., 0., 0., 1. ]
-        transIMUToGNSSAnt1: [ 0., 0., 0. ] # [0.0, 0.0, 0.0]
-        transIMUToGNSSAnt2: [ 0., 0., 0. ] # [0.0, 0.0, 0.0]
-        transIMUToLiDAR: [ -0.0249, 0.013439780101180,  -0.316013753414154 ]
-        rotIMUToLiDAR: [ 0.707106781186548,  0.707106781186548,  0.,
-                         0.707106781186548, -0.707106781186548,  0.,
-                         0.,  0., -1.0 ]
-
-        #rotIMUToLiDAR: [ 0.735364019870758, 0.677672028541565,  0.000000000000000000e+00,
-        #                 0.677672028541565, -0.735364019870758,  -0.001000000047497,
-        #                 -6.776719819754362e-04,  7.353639812208712e-04, -1.0 ]
-
-      Integrators: [ "BoreasLCIntegrator", "LIOIntegrator" ]   # ["UbloxIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]
-      #Integrators: ["IRTPVALCIntegrator"]   # ["UbloxIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]
+      Integrators: [ "BoreasGNSSLCIntegrator", ]   # [ "LIOIntegrator"]
 
       Optimizer:
         #undefined, BatchFixedLag, IncrementalFixedLag
@@ -89,7 +72,7 @@
         smootherLag: 5.0 #marginalization threshhold
         #QcGPWNOJInterpolator: 1000.
         #QcGPWNOJMotionPrior: 10000.
-        QcGPWNOJInterpolatorFull: [ 1000., 1000., 1000., 1000., 1000., 1000. ]
+        QcGPWNOJInterpolatorFull: [ 10000., 10000., 10000., 10000., 10000., 10000. ]
         QcGPWNOJMotionPriorFull: [ 10000., 10000., 10000., 10000., 10000., 10000. ]
         #QcGPWNOAInterpolator: 0.5
         #QcGPWNOAMotionPrior: 0.5

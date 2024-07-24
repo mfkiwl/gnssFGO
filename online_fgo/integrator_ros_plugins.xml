@@ -17,35 +17,30 @@
   ~ //
   ~
   -->
-<class_libraries>
-    <library path="online_fgo_integrator">
-        <class name="GNSSTCIntegrator" type="fgo::integrator::GNSSTCIntegrator"
-               base_class_type="fgo::integrator::IntegratorBase">
-            <description>
-                GNSSTCIntegrator
-            </description>
-        </class>
 
-        <class name="GNSSLCIntegrator" type="fgo::integrator::GNSSLCIntegrator"
-               base_class_type="fgo::integrator::IntegratorBase">
-            <description>
-                GNSSLCIntegrator
-            </description>
-        </class>
+<library path="online_fgo_integrator">
+    <class name="GNSSTCIntegrator" type="fgo::integrator::GNSSTCIntegrator" base_class_type="fgo::integrator::IntegratorBase">
+        <description>
+            GNSSTCIntegrator
+        </description>
+    </class>
 
-        <class name="LIOIntegrator" type="fgo::integrator::LIOIntegrator"
-               base_class_type="fgo::integrator::IntegratorBase">
-            <description>
-                LIOIntegrator CorrevitIntegrator
-            </description>
-        </class>
+    <class name="GNSSLCIntegrator" type="fgo::integrator::GNSSLCIntegrator" base_class_type="fgo::integrator::IntegratorBase">
+        <description>
+            GNSSLCIntegrator
+        </description>
+    </class>
 
-        <class name="CorrevitIntegrator" type="fgo::integrator::CorrevitIntegrator"
-               base_class_type="fgo::integrator::IntegratorBase">
-            <description>
-                CorrevitIntegrator
-            </description>
-        </class>
+    <class name="LIOIntegrator" type="fgo::integrator::LIOIntegrator" base_class_type="fgo::integrator::IntegratorBase">
+        <description>
+            LIOIntegrator CorrevitIntegrator
+        </description>
+    </class>
 
-    </library>
-</class_libraries>
+    <class name="CorrevitIntegrator" type="fgo::integrator::CorrevitIntegrator" base_class_type="fgo::integrator::IntegratorBase">
+        <description>
+            CorrevitIntegrator
+        </description>
+    </class>
+
+</library>

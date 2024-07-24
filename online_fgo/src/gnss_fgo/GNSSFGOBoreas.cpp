@@ -12,11 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
 #include "gnss_fgo/GNSSFGOBoreas.h"
+#include "sensor/gnss/GNSSDataParser.h"
 
 namespace gnss_fgo {
   GNSSFGOBoreasNode::GNSSFGOBoreasNode(const rclcpp::NodeOptions &opt) :
@@ -40,8 +41,10 @@ namespace gnss_fgo {
   }
 
   void GNSSFGOBoreasNode::onPVAGTMsgCb(nav_msgs::msg::Odometry::ConstSharedPtr pva) {
-    fgo::data::PVASolution this_pva{};
+    static const auto transReferenceFromBase = sensorCalibManager_->getTransformationFromBase("reference");
     rclcpp::Time ts = rclcpp::Time(pva->header.stamp.sec, pva->header.stamp.nanosec, RCL_ROS_TIME);
+    fgo::data::PVASolution this_pva{};
+
     this_pva.timestamp = ts;
     this_pva.tow = ts.seconds();
     this_pva.type = fgo::data::GNSSSolutionType::RTKFIX;
@@ -50,10 +53,15 @@ namespace gnss_fgo {
       pva->pose.pose.position.y * fgo::constants::deg2rad,
       pva->pose.pose.position.z).finished();
 
-    this_pva.xyz_ecef = fgo::utils::llh2xyz(this_pva.llh);
+    /* !
+     *  TODO: variance for the pva: is this provided in the odometry msg?
+     */
 
+    this_pva.xyz_ecef = fgo::utils::llh2xyz(this_pva.llh);
+    this_pva.xyz_var =  (gtsam::Vector3() << .5, 0.5, .5).finished();
     //const auto nedRenu = gtsam::Rot3(fgo::utils::nedRenu_llh(this_pva.llh));
-    const auto eRn = gtsam::Rot3(fgo::utils::nedRe_Matrix_asLLH(this_pva.llh)).inverse();
+    const auto eRenu = gtsam::Rot3(fgo::utils::enuRe_Matrix_asLLH(this_pva.llh)).inverse();
+    const auto eRned = gtsam::Rot3(fgo::utils::nedRe_Matrix_asLLH(this_pva.llh)).inverse();
 
     const auto vel_ned = (gtsam::Vector3() << pva->twist.twist.linear.y,
       pva->twist.twist.linear.x,
@@ -64,27 +72,21 @@ namespace gnss_fgo {
                                                  pva->pose.pose.orientation.y,
                                                  pva->pose.pose.orientation.z);
 
-    const auto rot_enu_imu = rot_enu.compose(paramsPtr_->imuRot.inverse());
-
-    //RCLCPP_WARN_STREAM(this->get_logger(), "rot enu imu: " << std::fixed << rot_enu_imu.rpy() * fgo::constants::rad2deg);
-    //RCLCPP_WARN_STREAM(this->get_logger(), "rot enu appenix: " << std::fixed << rot_enu.rpy() * fgo::constants::rad2deg);
-
-    // body velocity of applanix
     const auto vel_body_applanix = rot_enu.inverse().rotate(vel_ned);
-    //RCLCPP_WARN_STREAM(this->get_logger(), "vel_body_applanix: " << std::fixed << vel_body_applanix);
-    //const auto vel_body_imu = rot_enu_imu.inverse().rotate(vel_ned);
-    //const auto vel_n_imu = rot_enu_imu.rotate(vel_body_imu);
 
-    //RCLCPP_WARN_STREAM(this->get_logger(), "vel_body_imu: " << std::fixed << vel_body_imu);
-    //RCLCPP_WARN_STREAM(this->get_logger(), "vel_n_applanix: " << std::fixed << vel_ned);
-    //RCLCPP_WARN_STREAM(this->get_logger(), "vel_n_imu: " << std::fixed << vel_n_imu);
-    this_pva.vel_n = vel_ned; //rot_enu_imu.rotate(vel_body_imu); //nedRenu.rotate(vel_enu);
-
-    this_pva.rot = rot_enu;
-    this_pva.rot_ecef = eRn.compose(rot_enu);
-    //this_pva.vel_ecef = eRenu.rotate(vel_enu);
+    this_pva.vel_n = vel_ned;
     this_pva.vel_ecef = this_pva.rot_ecef.rotate(vel_body_applanix);
 
+
+    const auto rot_ned_imu = rot_enu.compose(transReferenceFromBase.rotation());
+
+
+    this_pva.rot_n = gtsam::Rot3::Quaternion(pva->pose.pose.orientation.w,
+                                             pva->pose.pose.orientation.x,
+                                             pva->pose.pose.orientation.y,
+                                             pva->pose.pose.orientation.z);
+
+    this_pva.rot_ecef = eRned.compose(this_pva.rot_n);
     this_pva.has_heading = true;
     this_pva.has_roll_pitch = true;
     this_pva.has_velocity_3D = true;
@@ -93,7 +95,7 @@ namespace gnss_fgo {
   }
 
   void GNSSFGOBoreasNode::calculateErrorOnState(const fgo::data::State &stateIn) {
-    static const auto lb_ref = paramsPtr_->transIMUToReference;
+    static const auto transReferenceFromBase = sensorCalibManager_->getTransformationFromBase("reference");
     static std::vector<fgo::data::State> stateCached;
 
     //auto labelBuffer = gnssLabelingMsgBuffer_.get_all_buffer();
@@ -128,13 +130,13 @@ namespace gnss_fgo {
         const auto pva_llh_std = gtsam::interpolate(itBefore->xyz_var, itAfter->xyz_var, coeff).cwiseSqrt();
         const auto pva_pos_ecef = gtsam::interpolate(itBefore->xyz_ecef, itAfter->xyz_ecef, coeff);
         const auto pva_rot_ecef = gtsam::interpolate(itBefore->rot_ecef, itAfter->rot_ecef, coeff);
-        auto pva_rot_ned = gtsam::interpolate(itBefore->rot, itAfter->rot, coeff);
+        auto pva_rot_ned = gtsam::interpolate(itBefore->rot_n, itAfter->rot_n, coeff);
         const auto pva_rot_ned_std = gtsam::interpolate(itBefore->rot_var, itAfter->rot_var, coeff).cwiseSqrt();
         const auto pva_vel_ned = gtsam::interpolate(itBefore->vel_n, itAfter->vel_n, coeff);
         const auto pva_vel_ned_std = gtsam::interpolate(itBefore->vel_var, itAfter->vel_var, coeff);
         const auto pva_vel_ecef = gtsam::interpolate(itBefore->vel_ecef, itAfter->vel_ecef, coeff);
 
-        pva_rot_ned = pva_rot_ned.compose(paramsPtr_->rotIMUToReference);
+        pva_rot_ned = pva_rot_ned.compose(transReferenceFromBase.rotation());
 
         const auto pva_llh = fgo::utils::WGS84InterpolationLLH(itBefore->llh,
                                                                itAfter->llh,
@@ -160,7 +162,7 @@ namespace gnss_fgo {
         const auto fgo_omega_std = stateIter->omegaVar.diagonal().cwiseSqrt();
         const auto fgo_bias_std = stateIter->imuBiasVar.diagonal().cwiseSqrt();
 
-        const auto pos_ant_main = fgo_pos_ecef + fgo_ori_ecef.rotate(lb_ref);
+        const auto pos_ant_main = fgo_pos_ecef + fgo_ori_ecef.rotate(transReferenceFromBase.translation());
         const auto pos_ant_llh = fgo::utils::xyz2llh(pos_ant_main);
         const gtsam::Rot3 nRe(fgo::utils::nedRe_Matrix(pos_ant_main));
 
@@ -170,13 +172,13 @@ namespace gnss_fgo {
 
         //gtsam::Rot3 nRePVT(fgo::utils::nedRe_Matrix_asLLH(posllh));
         const gtsam::Vector3 fgo_vel_ned = nRe.rotate(
-          fgo_vel_ecef + fgo_ori_ecef.rotate(gtsam::skewSymmetric((-lb_ref)) * fgo_omega));
+          fgo_vel_ecef + fgo_ori_ecef.rotate(gtsam::skewSymmetric((-transReferenceFromBase.translation())) * fgo_omega));
         const auto fgo_rot_ned = nRe.compose(fgo_ori_ecef);
         auto nRb_rpy = fgo_rot_ned.rpy(); //fgo::utils::func_DCM2EulerAngles(fgo_rot_ned.matrix());
 
         auto fgo_yaw = nRb_rpy(2) * 180. / M_PI;
         //RCLCPP_INFO_STREAM(this->get_logger(), "########## EVALUATE ANGLE ########## ");
-        //RCLCPP_INFO_STREAM(this->get_logger(), "FGO yaw rot: " << std::fixed << fgo_yaw);
+        //RCLCPP_INFO_STREAM(this->get_logger(), "FGO yaw rot_n: " << std::fixed << fgo_yaw);
         fgo_yaw = (fgo_yaw >= 0. ? fgo_yaw : (fgo_yaw + 360.));
         //RCLCPP_INFO_STREAM(this->get_logger(), "FGO yaw corrected: " << std::fixed << fgo_yaw);
         //RCLCPP_INFO_STREAM(this->get_logger(), "PVT yaw: " << std::fixed << pvtMeas.Yaw);

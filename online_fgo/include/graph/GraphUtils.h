@@ -20,77 +20,83 @@
 #define ONLINE_FGO_GRAPHUTILS_H
 
 #pragma once
-
 #include <rclcpp/rclcpp.hpp>
 #include <gtsam/linear/NoiseModel.h>
-#include "data/DataTypes.h"
+#include "data/DataTypesFGO.h"
 
-namespace fgo::graph {
+namespace fgo::graph
+{
 
-  /***
-   *
-   * @param timeStatePairs
-   * @param timeToQuery
-   * @return
-   */
-  inline fgo::data::State
-  queryCurrentPredictedState(const std::vector<std::pair<rclcpp::Time, fgo::data::State>> &timeStatePairs,
-                             const double &timeToQuery) {
-    auto itAfter = std::lower_bound(timeStatePairs.begin(), timeStatePairs.end(), timeToQuery,
-                                    [](const std::pair<rclcpp::Time, fgo::data::State> &pair,
-                                       double timestamp) -> bool {
-                                      // true, ... true, true, false(HERE), false, ... false
-                                      return pair.first.seconds() <= timestamp;
-                                    });
-    if (itAfter == timeStatePairs.begin())
-      return itAfter->second;
-    else
+    /***
+     *
+     * @param timeStatePairs
+     * @param timeToQuery
+     * @return
+     */
+    inline fgo::data::State queryCurrentPredictedState(const std::vector<std::pair<rclcpp::Time, fgo::data::State>>& timeStatePairs,
+                                                       const double& timeToQuery)
+    {
+      auto itAfter = std::lower_bound(timeStatePairs.begin(), timeStatePairs.end(), timeToQuery,
+                                      [](const std::pair<rclcpp::Time, fgo::data::State> &pair, double timestamp) -> bool {
+                                          // true, ... true, true, false(HERE), false, ... false
+                                          return pair.first.seconds() <= timestamp;
+                                      });
       return (itAfter - 1)->second;
-  }
-
-  /***
-   *
-   * @param modeType
-   * @param variance
-   * @param robustParam
-   * @param factor
-   * @return
-   */
-  inline gtsam::SharedNoiseModel assignNoiseModel(fgo::data::NoiseModel modeType,
-                                                  const gtsam::Vector &variance,
-                                                  double robustParam,
-                                                  const std::string &factor = "") {
-    gtsam::SharedNoiseModel model = gtsam::noiseModel::Diagonal::Variances(variance);
-    switch (modeType) {
-      case fgo::data::NoiseModel::GAUSSIAN: {
-        return model;
-      }
-      case fgo::data::NoiseModel::CAUCHY: {
-        return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Cauchy::Create(robustParam), model);
-      }
-      case fgo::data::NoiseModel::HUBER: {
-        return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Huber::Create(robustParam), model);
-      }
-      case fgo::data::NoiseModel::DCS: {
-        return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::DCS::Create(robustParam), model);
-      }
-      case fgo::data::NoiseModel::Tukey: {
-        return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Tukey::Create(robustParam), model);
-      }
-      case fgo::data::NoiseModel::GemanMcClure: {
-        return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::GemanMcClure::Create(robustParam),
-                                                 model);
-      }
-      case fgo::data::NoiseModel::Welsch: {
-        return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Welsch::Create(robustParam), model);
-      }
-      default: {
-        RCLCPP_WARN(rclcpp::get_logger("gnss_fgo"), "UNKNOWN noise model for factor %s", factor.c_str());
-        return model;
-      }
     }
 
-  }
+    /***
+     *
+     * @param modeType
+     * @param variance
+     * @param robustParam
+     * @param factor
+     * @return
+     */
+    inline gtsam::SharedNoiseModel assignNoiseModel(fgo::data::NoiseModel modeType,
+                                                    const gtsam::Vector& variance,
+                                                    double robustParam,
+                                                    const std::string& factor = "")
+    {
+      gtsam::SharedNoiseModel model = gtsam::noiseModel::Diagonal::Variances(variance);
+      switch (modeType)
+      {
+        case fgo::data::NoiseModel::GAUSSIAN:
+        {
+          return model;
+        }
+        case fgo::data::NoiseModel::CAUCHY:
+        {
+          return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Cauchy::Create(robustParam), model);
+        }
+        case fgo::data::NoiseModel::HUBER:
+        {
+          return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Huber::Create(robustParam), model);
+        }
+        case fgo::data::NoiseModel::DCS:
+        {
+          return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::DCS::Create(robustParam), model);
+        }
+        case fgo::data::NoiseModel::Tukey:
+        {
+          return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Tukey::Create(robustParam), model);
+        }
+        case fgo::data::NoiseModel::GemanMcClure:
+        {
+          return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::GemanMcClure::Create(robustParam), model);
+        }
+        case fgo::data::NoiseModel::Welsch:
+        {
+          return gtsam::noiseModel::Robust::Create(gtsam::noiseModel::mEstimator::Welsch::Create(robustParam), model);
+        }
+        default:
+        {
+          RCLCPP_WARN(rclcpp::get_logger("gnss_fgo"), "UNKNOWN noise model for factor %s", factor.c_str());
+          return model;
+        }
+      }
+
+    }
+
 
 
 }

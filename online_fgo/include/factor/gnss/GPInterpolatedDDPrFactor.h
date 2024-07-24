@@ -20,7 +20,7 @@
 #define ONLINE_FGO_GPINTERPOLATEDDDPRFACTORO_H
 
 #include "model/archive/GPInterpolatorPose3WNOA_O.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
 * Keys: pose of time i&j X(i)&X(j), velocity of time i&j V(i)&V(j)
@@ -41,7 +41,7 @@
 //Double-Difference starts at p. 323 in Farrell - Aided Navigation (Differenced at p. 313)
 namespace fgo::factors {
   class GPWONAInterpolatedDDPrFactor : public gtsam::NoiseModelFactor6<gtsam::Pose3,
-    gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> {
+          gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> {
 
   private:
     //measurements
@@ -57,16 +57,16 @@ namespace fgo::factors {
     fgo::models::GaussianProcessInterpolatorPose3WNOA_O GPbase_; //Interpolator
 
     typedef GPWONAInterpolatedDDPrFactor This;
-    typedef gtsam::NoiseModelFactor6 <gtsam::Pose3,
-    gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> Interpolator;
+    typedef gtsam::NoiseModelFactor6<gtsam::Pose3,
+            gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> Interpolator;
 
   public:
 
-    GPWONAInterpolatedDDPrFactor() {}
+      GPWONAInterpolatedDDPrFactor() {}
 
     //when meausrment are already known when build
-    GPWONAInterpolatedDDPrFactor(const gtsam::Key &point_i, const gtsam::Key &vel_i, const gtsam::Key &omega_i,
-                                 const gtsam::Key &point_j, const gtsam::Key &vel_j, const gtsam::Key &omega_j,
+    GPWONAInterpolatedDDPrFactor(const gtsam::Key& point_i, const gtsam::Key& vel_i, const gtsam::Key& omega_i,
+                                  const gtsam::Key& point_j, const gtsam::Key& vel_j, const gtsam::Key& omega_j,
                                  const double &PseuRaMR, const double &PseuRaMB,
                                  const double &PseuRaIR, const double &PseuRaIB,
                                  const gtsam::Point3 &pointMaster, const gtsam::Point3 &pointSatI,
@@ -75,42 +75,41 @@ namespace fgo::factors {
                                  const double &delta_t, const double &tau,
                                  const gtsam::Vector3 &omega1, const gtsam::Vector3 &omega2,
                                  const gtsam::SharedNoiseModel &model, const gtsam::SharedNoiseModel &Qc_model) :
-      Interpolator(model, point_i, vel_i, omega_i, point_j, vel_j, omega_j),
-      GPbase_(Qc_model, delta_t, tau), pointMaster_(pointMaster), pointSatI_(pointSatI),
-      pointBase_(pointBase), lb_(lb) {
+            Interpolator(model, point_i, vel_i, omega_i, point_j, vel_j, omega_j),
+            GPbase_(Qc_model, delta_t, tau), pointMaster_(pointMaster), pointSatI_(pointSatI),
+            pointBase_(pointBase), lb_(lb) {
       dDPseuRa_ = (PseuRaMR - PseuRaMB) - (PseuRaIR - PseuRaIB);
     }
 
     //when measurements are not known when build and ddmeasurement already made
-    GPWONAInterpolatedDDPrFactor(const gtsam::Key &point_i, const gtsam::Key &vel_i, const gtsam::Key &omega_i,
-                                 const gtsam::Key &point_j, const gtsam::Key &vel_j, const gtsam::Key &omega_j,
+    GPWONAInterpolatedDDPrFactor(const gtsam::Key& point_i, const gtsam::Key& vel_i, const gtsam::Key& omega_i,
+                                  const gtsam::Key& point_j, const gtsam::Key& vel_j, const gtsam::Key& omega_j,
                                  const double &ddPseuRa,
                                  const gtsam::Point3 &pointMaster, const gtsam::Point3 &pointSatI,
                                  const gtsam::Point3 &pointBase,
                                  const gtsam::Point3 &lb, const double &delta_t, const double &tau,
                                  const gtsam::Vector3 &omega1, const gtsam::Vector3 &omega2,
                                  const gtsam::SharedNoiseModel &model, const gtsam::SharedNoiseModel &Qc_model) :
-      Interpolator(model, point_i, vel_i, omega_i, point_j, vel_j, omega_j), GPbase_(Qc_model, delta_t, tau),
-      pointMaster_(pointMaster), pointSatI_(pointSatI), pointBase_(pointBase),
-      lb_(lb), dDPseuRa_(ddPseuRa) {}
+            Interpolator(model, point_i, vel_i, omega_i, point_j, vel_j, omega_j), GPbase_(Qc_model, delta_t, tau),
+            pointMaster_(pointMaster), pointSatI_(pointSatI), pointBase_(pointBase),
+            lb_(lb), dDPseuRa_(ddPseuRa) {}
 
-    GPWONAInterpolatedDDPrFactor(const gtsam::Key &point_i, const gtsam::Key &vel_i, const gtsam::Key &omega_i,
-                                 const gtsam::Key &point_j, const gtsam::Key &vel_j, const gtsam::Key &omega_j,
+      GPWONAInterpolatedDDPrFactor(const gtsam::Key& point_i, const gtsam::Key& vel_i, const gtsam::Key& omega_i,
+                                  const gtsam::Key& point_j, const gtsam::Key& vel_j, const gtsam::Key& omega_j,
                                  const double &ddPseuRa,
                                  const gtsam::Point3 &pointMaster, const gtsam::Point3 &pointSatI,
                                  const gtsam::Point3 &lb, const double &delta_t, const double &tau,
                                  const gtsam::Vector3 &omega1, const gtsam::Vector3 &omega2,
-                                 const gtsam::SharedNoiseModel &model, const gtsam::SharedNoiseModel &Qc_model,
-                                 const gtsam::Point3 &lb2) :
-      Interpolator(model, point_i, vel_i, omega_i, point_j, vel_j, omega_j), GPbase_(Qc_model, delta_t, tau),
-      pointMaster_(pointMaster), pointSatI_(pointSatI),
-      lb_(lb), dDPseuRa_(ddPseuRa), lb2_(lb2) {}
+                                 const gtsam::SharedNoiseModel &model, const gtsam::SharedNoiseModel &Qc_model, const gtsam::Point3 &lb2) :
+            Interpolator(model, point_i, vel_i, omega_i, point_j, vel_j, omega_j), GPbase_(Qc_model, delta_t, tau),
+            pointMaster_(pointMaster), pointSatI_(pointSatI),
+            lb_(lb), dDPseuRa_(ddPseuRa), lb2_(lb2) {}
 
     virtual ~GPWONAInterpolatedDDPrFactor() {}
 
     gtsam::NonlinearFactor::shared_ptr clone() const override {
       return boost::static_pointer_cast<gtsam::NonlinearFactor>(
-        gtsam::NonlinearFactor::shared_ptr(new This(*this)));
+              gtsam::NonlinearFactor::shared_ptr(new This(*this)));
     }
 
     gtsam::Vector evaluateError(const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
@@ -142,7 +141,7 @@ namespace fgo::factors {
       gtsam::Point3 positionReceiver = poseBody.compose(body_P_sensor).translation(); //pose_Antenna wrt to Earth
 
       //ranges
-      if (lb2_.norm() == 0) {
+      if (lb2_.norm() == 0){
         rangeRM = gtsam::distance3(positionReceiver, pointMaster_, e_RM);
         rangeRI = gtsam::distance3(positionReceiver, pointSatI_, e_RI);
         rangeBM = gtsam::distance3(pointBase_, pointMaster_);
@@ -156,67 +155,27 @@ namespace fgo::factors {
       }
 
       if (H1 || H2 || H3 || H4 || H5 || H6) {
-        gtsam::Matrix66 correction1 = (gtsam::Matrix66()
-          << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, pose1.rotation().matrix().transpose()).finished();
-        gtsam::Matrix66 correction2 = (gtsam::Matrix66()
-          << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, pose2.rotation().matrix().transpose()).finished();
-        gtsam::Matrix66 correction = (gtsam::Matrix66()
-          << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, poseBody.rotation().matrix()).finished();
+        gtsam::Matrix66 correction1 = (gtsam::Matrix66() << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, pose1.rotation().matrix().transpose()).finished();
+        gtsam::Matrix66 correction2 = (gtsam::Matrix66() << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, pose2.rotation().matrix().transpose()).finished();
+        gtsam::Matrix66 correction = (gtsam::Matrix66() << gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3, poseBody.rotation().matrix()).finished();
         //CORRECT MATRICES
         Hint1_P = correction * Hint1_P * correction1;
         Hint3_P = correction * Hint3_P * correction2;
 
         gtsam::Matrix rotation = poseBody.rotation().matrix(); // eRb
         gtsam::Matrix16 jacobian =
-          (gtsam::Matrix16() << (e_RM - e_RI) * rotation * gtsam::skewSymmetric(-lb_) -
-                                (e_RM2 - e_RI2) * rotation * gtsam::skewSymmetric(-lb2_),
-            (e_RM - e_RI) - (e_RM2 - e_RI2)).finished(); //calculate Jacobian for poseReceiver
+                (gtsam::Matrix16() << (e_RM - e_RI) * rotation * gtsam::skewSymmetric(-lb_) -
+                                      (e_RM2 - e_RI2) * rotation * gtsam::skewSymmetric(-lb2_),
+                        (e_RM - e_RI) - (e_RM2 - e_RI2)).finished(); //calculate Jacobian for poseReceiver
         if (H1) *H1 = (gtsam::Matrix16() << jacobian * Hint1_P).finished(); //pose1
-        if (H2) *H2 = (gtsam::Matrix13() << jacobian * Hint2_P.block<6, 3>(0, 3)).finished(); //vel1
-        if (H3) *H3 = (gtsam::Matrix13() << jacobian * Hint2_P.block<6, 3>(0, 0)).finished(); //omega1
+        if (H2) *H2 = (gtsam::Matrix13() << jacobian * Hint2_P.block<6,3>(0,3)).finished(); //vel1
+        if (H3) *H3 = (gtsam::Matrix13() << jacobian * Hint2_P.block<6,3>(0,0)).finished(); //omega1
         if (H4) *H4 = (gtsam::Matrix16() << jacobian * Hint3_P).finished(); //pose2
-        if (H5) *H5 = (gtsam::Matrix13() << jacobian * Hint4_P.block<6, 3>(0, 3)).finished(); //vel2
-        if (H6) *H6 = (gtsam::Matrix13() << jacobian * Hint4_P.block<6, 3>(0, 0)).finished(); //omega2
+        if (H5) *H5 = (gtsam::Matrix13() << jacobian * Hint4_P.block<6,3>(0,3)).finished(); //vel2
+        if (H6) *H6 = (gtsam::Matrix13() << jacobian * Hint4_P.block<6,3>(0,0)).finished(); //omega2
       }
 
       return (gtsam::Vector1() << (rangeRM - rangeBM) - (rangeRI - rangeBI) - dDPseuRa_).finished();
-    }
-
-    /** lifting all related state values in a vector after the ordering for evaluateError **/
-    gtsam::Vector liftValuesAsVector(const gtsam::Values &values) override {
-      const auto poseI = values.at<gtsam::Pose3>(key1());
-      const auto velI = values.at<gtsam::Vector3>(key2());
-      const auto omegaI = values.at<gtsam::Vector3>(key3());
-      const auto poseJ = values.at<gtsam::Pose3>(key4());
-      const auto velJ = values.at<gtsam::Vector3>(key5());
-      const auto omegaJ = values.at<gtsam::Vector3>(key6());
-      const auto liftedStates = (gtsam::Vector(24) << poseI.rotation().rpy(),
-        poseI.translation(),
-        velI, omegaI,
-        poseJ.rotation().rpy(),
-        poseJ.translation(),
-        velJ, omegaJ).finished();
-      return liftedStates;
-    }
-
-    gtsam::Values generateValuesFromStateVector(const gtsam::Vector &state) override {
-      assert(state.size() != 24);
-      gtsam::Values values;
-      try {
-        values.insert(key1(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(0, 0)),
-                                           gtsam::Point3(state.block<3, 1>(3, 0))));
-        values.insert(key2(), gtsam::Vector3(state.block<3, 1>(6, 0)));
-        values.insert(key3(), gtsam::Vector3(state.block<3, 1>(9, 0)));
-        values.insert(key4(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(12, 0)),
-                                           gtsam::Point3(state.block<3, 1>(15, 0))));
-        values.insert(key5(), gtsam::Vector3(state.block<3, 1>(18, 0)));
-        values.insert(key6(), gtsam::Vector3(state.block<3, 1>(21, 0)));
-      }
-      catch (std::exception &ex) {
-        std::cout << "Factor " << getName() << " cannot generate values from state vector " << state << " due to "
-                  << ex.what() << std::endl;
-      }
-      return values;
     }
 
     /** return the measured */
@@ -265,6 +224,6 @@ namespace fgo::factors {
 namespace gtsam {
   template<>
   struct traits<fgo::factors::GPWONAInterpolatedDDPrFactor> :
-    public Testable<fgo::factors::GPWONAInterpolatedDDPrFactor> {
+          public Testable<fgo::factors::GPWONAInterpolatedDDPrFactor> {
   };
 }

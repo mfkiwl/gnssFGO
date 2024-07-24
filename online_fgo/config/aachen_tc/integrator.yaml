@@ -9,16 +9,19 @@
       GNSSTCIntegrator:
         NLOSCSVFilePath: ""
         integratorPlugin: "GNSSTCIntegrator"
+        sensorName: "novatel_ant_main"
+        sensorAntMain: "novatel_ant_main"
+        sensorAntAux: "novatel_ant_aux"
         GNSSMeasurementFrequency: 10
-        zeroVelocityThreshold: 0.04
+        zeroVelocityThreshold: -0.04
 
         delayFromPPS: false
+
         useDualAntenna: false
         useDualAntennaDD: false
-
         addCBDPriorFactorOnNoGNSS: false
         usePseudoRangeDoppler: true
-        usePseudoRange: false
+        usePseudoRange: true
         useDopplerRange: false
         useDDCarrierPhase: false
         useDDPseudoRange: false
@@ -29,7 +32,6 @@
         pseudorangeFactorTil: 0  # 10s
 
         pseudorangeVarScaleAntMain: 2400. #4800. #3600
-        #pseudorangeVarScaleAntMain: 10. #4800. #3600
         dopplerrangeVarScaleAntMain: 8.
         pseudorangeVarScaleAntAux: 2400. #4800. #3600
         dopplerrangeVarScaleAntAux: 8.
@@ -50,6 +52,7 @@
 
       IRTPVALCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
+        sensorName: "reference"
         useForInitialization: true
         useHeaderTimestamp: true
         GNSSMeasurementFrequency: 10
@@ -91,6 +94,7 @@
       LIOIntegrator:
         notIntegrating: false
         integratorPlugin: "LIOIntegrator"
+        sensorName: "vlp16"
         pointCloudTopic: "/velodyne_points"
         lidarFrame: "velodyne"
         baselinkFrame: "base_link"

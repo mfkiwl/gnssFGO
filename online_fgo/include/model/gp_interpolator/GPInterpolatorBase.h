@@ -22,16 +22,11 @@
 #pragma once
 
 #include <iostream>
-#include <gtsam/geometry/Pose3.h>
-#include <gtsam/base/Matrix.h>
 #include <gtsam/base/numericalDerivative.h>
-
-#include "utils/NavigationTools.h"
 #include "utils/Pose3Utils.h"
 #include "utils/GPUtils.h"
 
 namespace fgo::models {
-
   class GPInterpolator {
   protected:
     gtsam::Matrix6 Qc_;
@@ -44,7 +39,6 @@ namespace fgo::models {
 
     GPInterpolator() = default;
 
-    //for WNOA and WNOJ
     explicit GPInterpolator(const gtsam::Matrix6 &Qc, double delta_t = 0.0, double tau = 0.0, bool useAutoDiff = false,
                             bool calcJacobian = true) {
       Qc_ = Qc;
@@ -70,12 +64,6 @@ namespace fgo::models {
     void update(double delta_t, double tau) {
       tau_ = tau;
       delta_t_ = delta_t;
-    }
-
-    void update(double delta_t, double tau, const gtsam::Matrix66 &Ad) {
-      tau_ = tau;
-      delta_t_ = delta_t;
-      Ad_ = Ad;
     }
 
   public:
@@ -128,7 +116,6 @@ namespace fgo::models {
                     boost::optional<gtsam::Matrix &> H7 = boost::none,
                     boost::optional<gtsam::Matrix &> H8 = boost::none) const {};
 
-
     virtual gtsam::Pose3
     interpolatePose_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
                      const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b) const {};
@@ -174,7 +161,6 @@ namespace fgo::models {
                          const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
                          const gtsam::Vector6 &acc2) const {};
 
-
     virtual gtsam::Vector6
     interpolateAcceleration(const gtsam::Pose3 &pose1, const gtsam::Vector3 &v1_n, const gtsam::Vector3 &omega1_b,
                             const gtsam::Vector6 &acc1,
@@ -194,7 +180,6 @@ namespace fgo::models {
                              const gtsam::Vector6 &acc1,
                              const gtsam::Pose3 &pose2, const gtsam::Vector3 &v2_n, const gtsam::Vector3 &omega2_b,
                              const gtsam::Vector6 &acc2) const {};
-
 
     virtual void print(const std::string &s = "GPIntegratorBase") const = 0;
 

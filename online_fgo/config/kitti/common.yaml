@@ -1,5 +1,5 @@
 ---
-/deutschland/online_fgo:
+/kitti/online_fgo:
   ros__parameters:
     use_sim_time: true
     GNSSFGO:
@@ -57,22 +57,7 @@
         NoOptimizationNearZeroVelocity: true
         VoteNearZeroVelocity: 0.2  # 20%
 
-      VehicleParameters:
-        transIMUToReference: [ 0.365, -0.627, -0.2085 ] # [0.0, 0.0, 0.0]
-        rotIMUToReference: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-        #transIMUToReference: [ 0., 0., -0.36 ]  #ca
-        #rotIMUToReference: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-        transIMUToGNSSAnt1: [ 0.365, -0.627, -0.2085 ] # [0.0, 0.0, 0.0]
-        transIMUToGNSSAnt2: [ -0.11, 0.49, -0.2085 ] # [0.0, 0.0, 0.0]
-
-        transIMUToLiDAR: [ 0.301411, 0., -0.0596 ]
-        transIMUToCorrevit: [ -1.5, 0., 1.2 ]
-        #transIMUToCorrevit: [0., 0., 0.]
-        rotIMUToLiDAR: [ 1., 0., 0., 0., -1., 0., 0., 0., -1. ]
-        #transIMUToLiDAR: [ 0., 0., 0. ]  # ca
-        #rotIMUToLiDAR: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-
-      Integrators: [ "IRTPVALCIntegrator", "UbloxLCIntegrator", "CorrevitIntegrator" ]   # ["UbloxIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]
+      Integrators: [ "GNSSPVALCIntegrator",   ]   # [ "LIOIntegrator"]
 
       Optimizer:
         #undefined, BatchFixedLag, IncrementalFixedLag

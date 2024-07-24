@@ -19,9 +19,9 @@
 #ifndef ONLINE_FGO_GPINTERPOLATEDTDCPFACTOR_H
 #define ONLINE_FGO_GPINTERPOLATEDTDCPFACTOR_H
 
-#include "include/factor/FactorTypes.h"
-#include "model/gp_interpolator/GPWNOAInterpolator.h"
-#include "include/factor/FactorTypes.h"
+#include "include/factor/FactorType.h"
+#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "include/factor/FactorType.h"
 
 /*Inputs:
  * Keys: pose of time i X(i)&X(j), velocity of time i&j V(i)&V(j), clock bias drift of time i C(i)
@@ -201,7 +201,8 @@ namespace fgo::factor {
 
     [[nodiscard]] gtsam::Vector
     evaluateError_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
-                   const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2, const gtsam::Vector3 &omega2) const {
+                   const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2,
+                   const gtsam::Vector3 &omega2) const {
 
       gtsam::Pose3 poseBodyi, poseBodyj; //interpolated position
 
@@ -373,13 +374,13 @@ namespace fgo::factor {
 
       if (H1)
         *H1 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Pose3>(
-          std::bind(&This::evaluateError_, this, std::placeholders::_1, vel1, omega1, pose2, vel2, omega2, pose3,
-                    vel3, omega3), pose1);
+          std::bind(&This::evaluateError_, this, std::placeholders::_1, vel1, omega1, pose2, vel2, omega2, pose3, vel3,
+                    omega3), pose1);
 
       if (H2) {
         *H2 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
-          std::bind(&This::evaluateError_, this, pose1, std::placeholders::_1, omega1, pose2, vel2, omega2, pose3,
-                    vel3, omega3), vel1);
+          std::bind(&This::evaluateError_, this, pose1, std::placeholders::_1, omega1, pose2, vel2, omega2, pose3, vel3,
+                    omega3), vel1);
       }
 
       if (H3) {
@@ -390,13 +391,13 @@ namespace fgo::factor {
 
       if (H4)
         *H4 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Pose3>(
-          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, std::placeholders::_1, vel2, omega2, pose3,
-                    vel3, omega3), pose2);
+          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, std::placeholders::_1, vel2, omega2, pose3, vel3,
+                    omega3), pose2);
 
       if (H5) {
         *H5 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
-          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, std::placeholders::_1, omega2, pose3,
-                    vel3, omega3), vel2);
+          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, std::placeholders::_1, omega2, pose3, vel3,
+                    omega3), vel2);
       }
 
       if (H6) {
@@ -407,13 +408,13 @@ namespace fgo::factor {
 
       if (H7)
         *H7 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Pose3>(
-          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, omega2, std::placeholders::_1,
-                    vel3, omega3), pose3);
+          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, omega2, std::placeholders::_1, vel3,
+                    omega3), pose3);
 
       if (H8) {
         *H8 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
-          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, omega2, pose3,
-                    std::placeholders::_1, omega3), vel3);
+          std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, omega2, pose3, std::placeholders::_1,
+                    omega3), vel3);
       }
 
       if (H9) {

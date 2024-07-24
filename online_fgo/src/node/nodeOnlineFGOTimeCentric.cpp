@@ -42,15 +42,16 @@
 #include "gnss_fgo/GNSSFGOTimeCentric.h"
 
 
-int main(int argc, char **argv) {
-  rclcpp::init(argc, argv);
-  auto nodeOptions = rclcpp::NodeOptions();
-  auto node = std::make_shared<gnss_fgo::GNSSFGOTimeCentricNode>(nodeOptions);
-  static const size_t THREAD_NUM = 7; // Receive and blocking command service.
-  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), THREAD_NUM);
-  executor.add_node(node);
-  executor.spin();
-  rclcpp::shutdown();
-  return 0;
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    auto nodeOptions = rclcpp::NodeOptions();
+    auto node = std::make_shared<gnss_fgo::GNSSFGOTimeCentricNode>(nodeOptions);
+    static const size_t THREAD_NUM = 7; // Receive and blocking command service.
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), THREAD_NUM);
+    executor.add_node(node);
+    executor.spin();
+    rclcpp::shutdown();
+    return 0;
 }
 

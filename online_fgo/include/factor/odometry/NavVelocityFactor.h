@@ -27,10 +27,9 @@
 #include <gtsam/base/Vector.h>
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/geometry/Point3.h>
-#include "include/factor/FactorTypes.h"
+#include "include/factor/FactorType.h"
 #include "utils/NavigationTools.h"
-#include "factor/FactorTypeIDs.h"
-#include "third_party/matlab_utils.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 
@@ -120,11 +119,10 @@ namespace fgo::factor {
         }
         return evaluateError_(pose, vel);
       } else {
-        gtsam::Matrix Hpos, Hrot1, Hrot2;
+        gtsam::Matrix Hpos, Hrot, Hrot1;
         const auto &pos = pose.translation(Hpos);
         const auto &rot = pose.rotation(Hrot1);
         const auto lbv_b = gtsam::skewSymmetric(-lb_) * angularVelocity_;
-        const auto pose_sensor = pos + rot.rotate(lb_, Hrot2);
         gtsam::Vector3 error;
 
         /*
@@ -137,36 +135,35 @@ namespace fgo::factor {
 
         switch (measuredVelFrame_) {
           case MeasurementFrame::NED: {
+            // ToDo: this is not exactly corrected: jacobian of nedRe w.r.t pos!
             gtsam::Matrix Hrot_vel;
             const auto lbv = rot.rotate(lbv_b);
-            const auto nRe = gtsam::Rot3(fgo::utils::nedRe_Matrix(pose_sensor));
-            const auto jac = matlab_utils::jacobianECEF2ENU(pose_sensor, vel + lbv);
-            const auto veln = nRe.rotate(vel + lbv);
-            if (H1) HH1 = jac.block<3, 3>(0, 0) * (Hpos + Hrot2 * Hrot1);
-            if (H2) HH2 = jac.block<3, 3>(3, 0);  // should be NOT COMPLETELY CORRECT
+            const auto nRe = gtsam::Rot3(fgo::utils::nedRe_Matrix(pos));
+            const auto veln = nRe.rotate(vel + lbv, Hrot);
+            if (H1) HH1 = Hpos + Hrot1;
+            if (H2) HH2 = Hrot;  // should be NOT COMPLETELY CORRECT
             error = veln - velMeasured_;
             break;
           }
           case MeasurementFrame::ENU: {
+            gtsam::Matrix Hrot_vel;
             const auto lbv = rot.rotate(lbv_b);
             const auto nRe = gtsam::Rot3(fgo::utils::enuRe_Matrix(pos));
-            const auto jac = matlab_utils::jacobianECEF2NED(pose_sensor, vel + lbv);
-            const auto veln = nRe.rotate(vel + lbv);
-            if (H1) HH1 = jac.block<3, 3>(0, 0) * (Hpos + Hrot2 * Hrot1);
-            if (H2) HH2 = jac.block<3, 3>(3, 0);  // should be NOT COMPLETELY CORRECT
+            const auto veln = nRe.rotate(vel + lbv, Hrot, Hrot_vel);
+            if (H1) HH1 = Hpos + Hrot * Hrot1;
+            if (H2) HH2 = Hrot_vel;  // should be NOT COMPLETELY CORRECT
             error = veln - velMeasured_;
             break;
           }
           case MeasurementFrame::BODY: {
-            gtsam::Matrix Hrot3, Hrot_vel;
-            error = rot.unrotate(vel, Hrot3, Hrot_vel) - velMeasured_ + lbv_b;
-            if (H1) HH1 = Hrot3 * Hrot1;
+            gtsam::Matrix Hrot_vel;
+            error = rot.unrotate(vel, Hrot, Hrot_vel) - velMeasured_ + lbv_b;
+            if (H1) HH1 = Hrot * Hrot1;
             if (H2) HH2 = Hrot_vel;  // should be NOT COMPLETELY CORRECT
             break;
           }
           default: {
             const auto lbv = rot.rotate(lbv_b);
-            if (H1) HH1 = (gtsam::Matrix36() << gtsam::Z_3x3, gtsam::I_3x3).finished();
             if (H2) HH2 = gtsam::Matrix33::Identity();
             error = vel + lbv - velMeasured_;
             break;
@@ -207,37 +204,36 @@ namespace fgo::factor {
     [[nodiscard]] gtsam::Vector evaluateError_(const gtsam::Pose3 &pose, const gtsam::Vector3 &vel) const {
 
       gtsam::Vector3 error;
-      const auto lbv_b = gtsam::skewSymmetric(-lb_) * angularVelocity_;
-      const auto &rot = pose.rotation();
-      const auto pose_sensor = pose.translation() + rot.rotate(lb_);
+      auto lbv_b = gtsam::skewSymmetric(-lb_) * angularVelocity_;
 
       switch (measuredVelFrame_) {
         case MeasurementFrame::NED: {
-          const auto lbv = rot.rotate(lbv_b);
-          const auto nRe = gtsam::Rot3(fgo::utils::nedRe_Matrix(pose_sensor));
-          const auto veln = nRe.rotate(vel + lbv);
+          auto lbv = pose.rotation().rotate(lbv_b);
+          auto nRe = gtsam::Rot3(fgo::utils::nedRe_Matrix(pose.translation()));
+          auto veln = nRe.rotate(vel + lbv);
           error = veln - velMeasured_;
           break;
         }
         case MeasurementFrame::ENU: {
-          const auto lbv = rot.rotate(lbv_b);
-          const auto nRe = gtsam::Rot3(fgo::utils::enuRe_Matrix(pose_sensor));
-          const auto veln = nRe.rotate(vel + lbv);
+          auto lbv = pose.rotation().rotate(lbv_b);
+          auto nRe = gtsam::Rot3(fgo::utils::enuRe_Matrix(pose.translation()));
+          auto veln = nRe.rotate(vel + lbv);
           error = veln - velMeasured_;
           break;
         }
         case MeasurementFrame::BODY: {
-          if (rot.rpy().hasNaN())
+          if (pose.rotation().rpy().hasNaN())
             std::cout << "VELFACTOR ROTATION HAS NAN" << std::endl;
 
           if (vel.hasNaN())
             std::cout << "VELFACTOR VELOCITY HAS NAN" << std::endl;
-          const auto velb = rot.unrotate(vel) + lbv_b;
+          auto velb = pose.rotation().unrotate(vel) + lbv_b;
+          //std::cout << "velb: " << velb << std::endl;
           error = velb - velMeasured_;
           break;
         }
         default: {
-          const auto lbv = rot.rotate(lbv_b);
+          const auto lbv = pose.rotation().rotate(lbv_b);
           error = vel + lbv - velMeasured_;
           break;
         }

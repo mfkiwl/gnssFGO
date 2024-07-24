@@ -28,9 +28,9 @@
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/navigation/AttitudeFactor.h>
-#include "include/factor/FactorTypes.h"
+#include "include/factor/FactorType.h"
 #include "utils/NavigationTools.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 

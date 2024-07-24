@@ -26,15 +26,16 @@
 #include <gtsam/geometry/Pose3.h>
 
 #include "gnss_fgo/param/GNSSFGOParams.h"
-#include "data/DataTypes.h"
-#include "include/factor/FactorTypes.h"
+#include "include/factor/FactorType.h"
 
 
 namespace fgo::graph {
   using namespace fgo::data;
   enum OptimizationStrategy {
     ONIMU = 0,
-    ONGNSS = 1
+    ONGNSS = 1,
+    ONLIDARKEYFRAME = 2,
+    ONCAMERAKEYFRAME = 3,
   };
 
   enum SmootherType {
@@ -46,23 +47,24 @@ namespace fgo::graph {
 
   struct GraphParamBase : gnss_fgo::GNSSFGOParams {
     // Graph
-    double smootherLag = 0.1; // d
+    double smootherLag = 0.1;
     SmootherType smootherType = SmootherType::ISAM2FixedLag;
 
     // measurement model
     bool addConstantAccelerationFactor = false;
     gtsam::Vector6 QcGPInterpolatorFull;
     gtsam::Vector6 QcGPMotionPriorFull;
+    gtsam::Matrix66 ad = gtsam::Matrix66::Identity();
     bool publishResiduals = true;
-    bool publishResidualsOnline = true;
+    bool publishResidualsOnline = false;
     std::vector<uint64_t> skippedFactorsForResiduals;
     bool onlyLastResiduals = true;
     bool AutoDiffNormalFactor = true;
     bool AutoDiffGPInterpolatedFactor = true;
-    bool AutoDiffGPMotionPriorFactor = true;
+    bool AutoDiffGPMotionPriorFactor = false;
     bool GPInterpolatedFactorCalcJacobian = true;
 
-    bool useEstimatedVarianceAfterInit = true;
+    bool addEstimatedVarianceAfterInit = false;
     bool addConstDriftFactor = false;
     data::NoiseModel noiseModelClockFactor = data::NoiseModel::GAUSSIAN;
     double robustParamClockFactor = 0.5;
@@ -88,7 +90,7 @@ namespace fgo::graph {
   typedef std::shared_ptr<GraphParamBase> GraphParamBasePtr;
 
   struct GraphTimeCentricParam : GraphParamBase {
-    bool addMMFactor = false;
+    bool useMMFactor = false;
 
     //estimation
     GraphTimeCentricParam() = default;

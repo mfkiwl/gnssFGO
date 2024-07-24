@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -36,10 +36,10 @@
 #include <gtsam/base/numericalDerivative.h>
 #include <eigen3/unsupported/Eigen/MatrixFunctions>
 
-#include "factor/FactorTypes.h"
+#include "factor/FactorType.h"
 #include "utils/GPUtils.h"
 #include "utils/Pose3Utils.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 
@@ -75,7 +75,7 @@ namespace fgo::factor {
       c3_ = (gtsam::Matrix66() << c3exp_.exp()).finished();
     }
 
-    GPPriorBase() {};
+    GPPriorBase() = default;
 
     ~GPPriorBase() = default;
 

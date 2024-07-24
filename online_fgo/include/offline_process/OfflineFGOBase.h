@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -30,10 +30,20 @@
 #include <keyboard_handler/keyboard_handler.hpp>
 
 #include "gnss_fgo/GNSSFGOLocalizationBase.h"
-#include "utils/indicators/indicators.hpp"
+//#include "utils/indicators/indicators.hpp"
 
 namespace offline_process
 {
+  using gtsam::symbol_shorthand::X;  // Pose3 (R,t)
+  using gtsam::symbol_shorthand::V;  // Vel   (xdot,ydot,zdot)
+  using gtsam::symbol_shorthand::B;  // Bias  (ax,ay,az,gx,gy,gz)
+  using gtsam::symbol_shorthand::C;  // Receiver clock bias (cb,cd)
+  using gtsam::symbol_shorthand::W;  // angular Velocity in body  frame
+  using gtsam::symbol_shorthand::N;  // integer ambiguities
+  using gtsam::symbol_shorthand::M;  // integer ddambiguities
+  using gtsam::symbol_shorthand::A;  // acceleration
+  using gtsam::symbol_shorthand::O;
+
     using namespace fgo::integrator;
     using namespace fgo::graph;
     class OfflineFGOBase : public gnss_fgo::GNSSFGOLocalizationBase

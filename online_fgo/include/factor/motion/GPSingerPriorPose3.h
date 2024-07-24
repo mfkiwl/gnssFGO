@@ -13,7 +13,7 @@
 //  limitations under the License.
 //
 //  Author: Zirui Bai (zirui.bai@rwth-aachen.de)
-//          Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//          Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 

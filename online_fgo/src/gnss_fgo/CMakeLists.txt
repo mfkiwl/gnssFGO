@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-#  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+#  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 #          Jiandong Chen (jiandong.chen@rwth-aachen.de)
 
 set(ONLINEFGO_GNSSFGO_NAME
@@ -20,11 +20,9 @@ set(ONLINEFGO_GNSSFGO_NAME
 )
 add_library(${ONLINEFGO_GNSSFGO_NAME} 
     SHARED
-    # GNSSFGOBoreas.cpp
+    GNSSFGOBoreas.cpp
     GNSSFGOLocalizationBase.cpp
-    GNSSFGOLooselyCoupled.cpp
-    GNSSFGOTimeCentric.cpp
-    GNSSFGOUrbanLoco.cpp
+        GNSSFGOTimeCentric.cpp
 )
 target_include_directories(${ONLINEFGO_GNSSFGO_NAME}
     PUBLIC

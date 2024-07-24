@@ -41,10 +41,10 @@ namespace fgo::utils {
 ///WNOJ addition
   typedef Eigen::Matrix<double, 18, 1> Vector_18;
   typedef Eigen::Matrix<double, 18, 18> Matrix_18;
-  typedef Eigen::Matrix<double, 6, 18> Matrix_6_18;
+//typedef Eigen::Matrix<double, 6, 18> Matrix_6_18;
   typedef Eigen::Matrix<double, 18, 6> Matrix_18_6;
-  typedef Eigen::Matrix<double, 3, 18> Matrix_3_18;
-  typedef Eigen::Matrix<double, 18, 3> Matrix_18_3;
+//typedef Eigen::Matrix<double, 3, 18> Matrix_3_18;
+//typedef Eigen::Matrix<double, 18, 3> Matrix_18_3;
 
   inline geometry_msgs::msg::Vector3 convertGTVec3ToROS(const gtsam::Vector3 &gtVec) {
     geometry_msgs::msg::Vector3 msg;

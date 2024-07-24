@@ -31,7 +31,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
  * Keys: pose of time i X(i), integer double differenced ambiguity of time i M(i)

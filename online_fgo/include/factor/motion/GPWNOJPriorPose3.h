@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -139,7 +139,7 @@ namespace fgo::factor {
           v2 = convertVwWbToVbWb(vel2, omega2, pose2);
         }
 
-        // in GTSAM we have rot before trans
+        // in GTSAM we have rot_n before trans
         // then. xi^curlyvee = [phi, pho]^curlyvee = [phi^ 0; pho^ phi^]
         const gtsam::Vector6 JinvVel2 = Jinv * v2;
         const gtsam::Vector3 omegaJinvVel2 = JinvVel2.head(3), rho2JinvVel2 = JinvVel2.tail(3);
@@ -195,7 +195,7 @@ namespace fgo::factor {
           // JinvVel2SkewMatrix * v2 = - v2SkewMatrix * Jinv*V2
           *H4 = (fgo::utils::Matrix_18_6() << J_Tj,
             Jdiff_Ti + Jinv * H2p,
-            (0.25 * V2SkewMatrix * V2SkewMatrix + 0.5 * A2SkewMatrix) * J_Tj).finished();  // ToDo
+            (0.25 * V2SkewMatrix * V2SkewMatrix + 0.5 * A2SkewMatrix) * J_Tj).finished();
         }
 
         if (H5) *H5 = Hv2 * H2v;

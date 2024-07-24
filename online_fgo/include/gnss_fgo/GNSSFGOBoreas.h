@@ -60,7 +60,7 @@
 #include "GNSSFGOLocalizationBase.h"
 #include "graph/GraphTimeCentric.h"
 #include "param/GNSSFGOParams.h"
-#include "data/DataTypes.h"
+#include "data/DataTypesFGO.h"
 #include "data/Buffer.h"
 #include "utils/Constants.h"
 #include "utils/GNSSUtils.h"
@@ -75,19 +75,21 @@ using gtsam::symbol_shorthand::M;  // integer ddambiguities
 using gtsam::symbol_shorthand::A;  // acceleration
 using gtsam::symbol_shorthand::O;
 
-namespace gnss_fgo {
-  class GNSSFGOBoreasNode : public GNSSFGOLocalizationBase {
-  protected:
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subPVAGT_;
+namespace gnss_fgo
+{
+    class GNSSFGOBoreasNode : public GNSSFGOLocalizationBase
+    {
+    protected:
+        fgo::data::CircularDataBuffer<fgo::data::PVASolution> pvaBuffer_;
+        rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr subPVAGT_;
 
-  protected:
-    void onPVAGTMsgCb(nav_msgs::msg::Odometry::ConstSharedPtr pva);
+    protected:
+        void onPVAGTMsgCb(nav_msgs::msg::Odometry::ConstSharedPtr pva);
+        void calculateErrorOnState(const fgo::data::State& state) override;
 
-    void calculateErrorOnState(const fgo::data::State &state) override;
-
-  public:
-    explicit GNSSFGOBoreasNode(const rclcpp::NodeOptions &opt);
-  };
+    public:
+        explicit GNSSFGOBoreasNode(const rclcpp::NodeOptions &opt);
+    };
 
 }
 

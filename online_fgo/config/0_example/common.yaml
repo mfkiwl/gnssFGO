@@ -1,5 +1,5 @@
 ---
-/offline_fgo/learning_gp:
+/deutschland/online_fgo:
   ros__parameters:
     use_sim_time: true
     GNSSFGO:
@@ -63,25 +63,6 @@
         NoOptimizationNearZeroVelocity: false
         VoteNearZeroVelocity: 0.1 # 20%
         NoOptimizationAfterStates: 0
-
-      VehicleParameters:
-        # Param DELoco
-        #transIMUToReference: [ -0.11, -0.49, -0.2085 ] # AC
-        #rotIMUToReference: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-        #transIMUToGNSSAnt1: [ -0.11, -0.49, -0.2085 ]
-        #transIMUToGNSSAnt2: [ -0.11, 0.49, -0.2085 ]
-        #transIMUToLiDAR: [ 0.301411, 0., -0.0596 ]  #
-        #rotIMUToLiDAR: [ 1., 0., 0., 0., -1., 0., 0., 0., -1. ]
-        # Param Boreas
-        IMURot: [ 0., 1., 0., 1., 0., 0., 0., 0., -1. ]
-        transIMUToReference: [ 0., 0., 0. ] # [0.0, 0.0, 0.0]
-        rotIMUToReference: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-        transIMUToGNSSAnt1: [ 0., 0., 0. ] # [0.0, 0.0, 0.0]
-        transIMUToGNSSAnt2: [ 0., 0., 0. ] # [0.0, 0.0, 0.0]
-        transIMUToLiDAR: [ -0.0249, 0.013439780101180,  -0.316013753414154 ]
-        rotIMUToLiDAR: [ 0.707106781186548,  0.707106781186548,  0.,
-                         0.707106781186548, -0.707106781186548,  0.,
-                         0.,  0., -1.0 ]
 
       Integrators: [ "BoreasLCIntegrator", ]   # ["BoreasLCIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]
       #Integrators: ["IRTPVALCIntegrator"]   # ["UbloxIntegrator", "CorrevitIntegrator", "GNSSTCIntegrator", "LIOIntegrator"]

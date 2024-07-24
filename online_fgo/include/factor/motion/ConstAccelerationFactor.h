@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -34,7 +34,7 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
 
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 /**

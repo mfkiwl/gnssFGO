@@ -27,58 +27,57 @@
 #include "sensor/lidar/LIOSAM.h"
 #include "sensor/lidar/LIOSAMUtils.h"
 
-namespace fgo::integrator {
-  using namespace sensors::LiDAR::LIOSAM;
+namespace fgo::integrator
+{
+    using namespace sensors::LiDAR::LIOSAM;
 
-  class LIOIntegrator : public IntegratorBase {
-    std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
-    std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
-    IntegratorOdomParamsPtr integratorParamPtr_;
-    std::vector<fgo::data::OdomResult> odomResults_;
-    std::shared_ptr<sensors::LiDAR::LIOSAM::LIOSAMOdometry> LIOSAM_;
+    class LIOIntegrator : public IntegratorBase
+    {
+        std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
+        std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
+        IntegratorOdomParamsPtr integratorParamPtr_;
+        std::vector<fgo::data::OdomResult> odomResults_;
+        std::shared_ptr<sensors::LiDAR::LIOSAM::LIOSAMOdometry> LIOSAM_;
 
-  public:
-    explicit LIOIntegrator() = default;
+    public:
+        explicit LIOIntegrator() = default;
+        ~LIOIntegrator() override = default;
 
-    ~LIOIntegrator() override = default;
+        void initialize(rclcpp::Node& node, fgo::graph::GraphBase& graphPtr, const std::string& integratorName, bool isPrimarySensor = false) override;
 
-    void initialize(rclcpp::Node &node, fgo::graph::GraphBase &graphPtr, const std::string &integratorName,
-                    bool isPrimarySensor = false) override;
+        bool addFactors(
+          const boost::circular_buffer<std::pair<double, gtsam::Vector3>>& timestampGyroMap,
+          const boost::circular_buffer<std::pair<size_t, gtsam::Vector6>>& stateIDAccMap,
+          const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap &currentKeyIndexTimestampMap,
+          std::vector<std::pair<rclcpp::Time, fgo::data::State>>& timePredStates,
+          gtsam::Values& values,
+          fgo::solvers::FixedLagSmoother::KeyTimestampMap& keyTimestampMap,
+          gtsam::KeyVector& relatedKeys) override;
 
-    void feedRAWData(const lio_sam::msg::CloudInfo &msg) {
-      LIOSAM_->laserCloudInfoHandler(msg);
-    }
+        std::map<uint64_t, double> factorizeAsPrimarySensor() override;
 
-    bool addFactors(
-      const boost::circular_buffer<std::pair<double, gtsam::Vector3>> &timestampGyroMap,
-      const boost::circular_buffer<std::pair<size_t, gtsam::Vector6>> &stateIDAccMap,
-      const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap &currentKeyIndexTimestampMap,
-      std::vector<std::pair<rclcpp::Time, fgo::data::State>> &timePredStates,
-      gtsam::Values &values,
-      fgo::solvers::FixedLagSmoother::KeyTimestampMap &keyTimestampMap,
-      gtsam::KeyVector &relatedKeys) override;
+        bool fetchResult(
+            const gtsam::Values& result,
+            const gtsam::Marginals& martinals,
+            const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap& keyIndexTimestampMap,
+            fgo::data::State& optState
+        ) override;
 
-    std::map<uint64_t, double> factorizeAsPrimarySensor() override;
+        bool checkHasMeasurements() override
+        {
+          return !LIOSAM_->hasOdom();
+        }
 
-    bool fetchResult(
-      const gtsam::Values &result,
-      const gtsam::Marginals &martinals,
-      const fgo::solvers::FixedLagSmoother::KeyIndexTimestampMap &keyIndexTimestampMap,
-      fgo::data::State &optState
-    ) override;
+        void cleanBuffers() override
+        {
+          LIOSAM_->cleanBuffer();
+        }
 
-    bool checkHasMeasurements() override {
-      return !LIOSAM_->hasOdom();
-    }
-
-    void cleanBuffers() override {
-      LIOSAM_->cleanBuffer();
-    }
-
-    void notifyOptimization(double noOptimizationDuration) override {
-      noOptimizationDuration_ = noOptimizationDuration;
-      LIOSAM_->notifyOptimization();
-    }
-  };
+        void notifyOptimization(double noOptimizationDuration) override
+        {
+          noOptimizationDuration_ = noOptimizationDuration;
+          LIOSAM_->notifyOptimization();
+        }
+    };
 }
 #endif //ONLINE_FGO_LIOINTEGRATOR_H

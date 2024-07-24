@@ -25,6 +25,8 @@
 #include <irt_nav_msgs/msg/gnss_labeling.hpp>
 #include <irt_nav_msgs/msg/pva_geodetic.hpp>
 
+#include "IntegratorBase.h"
+
 #include "factor/gnss/PrDrFactor.h"
 #include "factor/gnss/PrFactor.h"
 #include "factor/gnss/DrFactor.h"
@@ -40,11 +42,10 @@
 #include "factor/gnss/GPInterpolatedDDPrDrFactor.h"
 #include "factor/gnss/GPInterpolatedDDCpFactor.h"
 
-#include "sensor/GNSS/GNSSDataParser.h"
 #include "utils/GNSSUtils.h"
 #include "utils/LambdaAlgorithm.h"
 #include "utils/rapidcsv.h"
-#include "IntegratorBase.h"
+#include "sensor/gnss/GNSSDataParser.h"
 
 namespace fgo::integrator {
   using namespace ::utils;
@@ -72,6 +73,9 @@ namespace fgo::integrator {
     std::atomic_bool zeroVelocity_{};
 
     std::map<int, std::map<int, bool>> LOSLoopUpTable_;
+
+    gtsam::Pose3 baseToAntMainTrans_;
+    gtsam::Pose3 baseToAntAuxTrans_;
 
   private:
 
@@ -105,20 +109,120 @@ namespace fgo::integrator {
 
     void onGNSSMsgCb(irt_nav_msgs::msg::GNSSObsPreProcessed::ConstSharedPtr gnssMeasurement);
 
+    // ToDo: @haoming to be deleted in next release!
+    /*
     //we use this function to trigger the factor builder and disconnect the Callback of GNSS and the FactorBuilder
     //when GNSS data comes it just gets saved and trigger checks if new data is there and then builds factor from it
-    //fgo::data::GNSSMeasurement convertGNSSMsg(irt_nav_msgs::msg::GNSSObsPreProcessed::ConstSharedPtr gnssMsg,
-    //                                                boost::optional<irt_nav_msgs::msg::GNSSLabeling&> satLabels = boost::none);
+    fgo::data::GNSSMeasurement convertGNSSMsg(irt_nav_msgs::msg::GNSSObsPreProcessed::ConstSharedPtr gnssMsg,
+                                              boost::optional<irt_nav_msgs::msg::GNSSLabeling &> satLabels = boost::none);
+    */
+    //ToDO: @haoming to be deleted in next release!
+    /*
+    inline void extractGNSSObs(const irt_nav_msgs::msg::GNSSObs &gnssObsMsg,
+                               std::vector<fgo::data::GNSSObs> &gnssObsVec,
+                               bool isMainAnt = true,
+                               boost::optional<std::vector<irt_nav_msgs::msg::SatLabel> &> satLabels = boost::none,
+                               boost::optional<std::map<int, bool> &> LOSLoopUp = boost::none) {
+      //RCLCPP_INFO(this->get_logger(), "/////////////////////////////////////////////");
+      //std::list<int> alreadyin;
+      for (size_t i = 0; i < gnssObsMsg.prn.size(); i++) {
+        double pr = gnssObsMsg.pseudorange[i];
+        //when pr = 0 or nan then do nothing
+        if (pr == 0.0 || (pr != pr))
+          continue;
 
+        fgo::data::GNSSObs gnssObs;
+        //RCLCPP_INFO_STREAM(this->get_logger(), "PRN: " << gnssObsMsg.prn[i]);
+        gnssObs.satId = gnssObsMsg.prn[i];
+        //RCLCPP_INFO_STREAM(this->get_logger(), "SatPos: x: " << std::fixed << gnssObsMsg.satelite_pos[i].x << " y: " <<  gnssObsMsg.satelite_pos[i].y << " z: " << gnssObsMsg.satelite_pos[i].z);
+        gnssObs.satPos = gtsam::Vector3(gnssObsMsg.satelite_pos[i].x,
+                                        gnssObsMsg.satelite_pos[i].y,
+                                        gnssObsMsg.satelite_pos[i].z);
+        //RCLCPP_INFO_STREAM(this->get_logger(), "SatPos: "<< std::fixed  <<  gnssObs.satPos.transpose());
+        //RCLCPP_INFO_STREAM(this->get_logger(), "POSNORM: "<< std::fixed  <<  gnssObs.satPos.norm());
+        gnssObs.satVel = gtsam::Vector3(gnssObsMsg.satelite_vec[i].x,
+                                        gnssObsMsg.satelite_vec[i].y,
+                                        gnssObsMsg.satelite_vec[i].z);
+        //RCLCPP_INFO_STREAM(this->get_logger(), "SatVelNorm: " << std::fixed  <<  gnssObs.satVel.norm());
+        //RCLCPP_INFO_STREAM(this->get_logger(), "PR: " << std::fixed  <<  gnssObsMsg.pseudorange[i]);
+        gnssObs.pr = gnssObsMsg.pseudorange[i];
+        //RCLCPP_INFO_STREAM(this->get_logger(), "PR: " << std::fixed  <<  gnssObs.pr);
+
+        if (isMainAnt) {
+          gnssObs.drVar = gnssObsMsg.deltarange_var[i] * pow(paramPtr_->dopplerrangeVarScaleAntMain, 2);
+          if (!paramPtr_->pseudorangeUseRawStd) {
+            gnssObs.prVar = gnssObsMsg.pseudorange_var[i] * pow(paramPtr_->pseudorangeVarScaleAntMain, 2);
+          } else {
+            gnssObs.prVar = pow(gnssObsMsg.pseudorange_var_measured[i], 2) * paramPtr_->pseudorangeVarScaleAntMain;
+          }
+
+          if (LOSLoopUp) {
+            auto LOSIter = LOSLoopUp->find(gnssObs.satId);
+            if (LOSIter != LOSLoopUp->end()) {
+              RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(), "PRN " << gnssObs.satId << " is LOS? " << LOSIter->second);
+              gnssObs.isLOS = LOSIter->second;
+            } else
+              RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(), "PRN " << gnssObs.satId << " NOT IN LOOPUP Table");
+
+          }
+
+        } else {
+          gnssObs.drVar = gnssObsMsg.deltarange_var[i] * pow(paramPtr_->dopplerrangeVarScaleAntAux, 2);
+          if (!paramPtr_->pseudorangeUseRawStd) {
+            gnssObs.prVar = gnssObsMsg.pseudorange_var[i] * pow(paramPtr_->pseudorangeVarScaleAntAux, 2);
+          } else {
+            gnssObs.prVar = pow(gnssObsMsg.pseudorange_var_measured[i], 2) * paramPtr_->pseudorangeVarScaleAntAux;
+          }
+        }
+        gnssObs.prVarRaw = std::pow(gnssObsMsg.pseudorange_var_measured[i], 2);
+        gnssObs.dr = gnssObsMsg.deltarange[i];
+        //RCLCPP_INFO_STREAM(this->get_logger(), "DR: " << std::fixed  <<  gnssObs.dr);
+
+        gnssObs.cp = gnssObsMsg.carrierphase[i];
+        gnssObs.el = gnssObsMsg.elevation_angle[i]; //fgo::utils::calcEl(gnssObs.satPos, currentPredState_.state.t());
+        gnssObs.cn0 = gnssObsMsg.cn0[i];
+        gnssObs.cpVar = fgo::utils::GNSS::calculateDDVariance(paramPtr_->weightingModel, paramPtr_->carrierphaseStd,
+                                                              paramPtr_->lambdaL1, //TODO @Haoming how to fix?
+                                                              gnssObs.el, gnssObsMsg.carrierphase_var_measured[i],
+                                                              rosNodePtr_->get_name());
+        gnssObs.cpVarRaw =
+          std::pow(gnssObsMsg.carrierphase_var_measured[i] * paramPtr_->lambdaL1, 2) * paramPtr_->carrierStdScale;
+        gnssObs.locktime = gnssObsMsg.locktime[i];
+
+        if (satLabels) {
+          irt_nav_msgs::msg::SatLabel label;
+          label.prn = gnssObs.satId;
+          label.sat_pos = fgo::utils::convertGTVec3ToROS(gnssObs.satPos);
+          label.sat_vel = fgo::utils::convertGTVec3ToROS(gnssObs.satVel);
+          label.psr = gnssObs.pr;
+          label.psr_raw = gnssObsMsg.pseudorange_raw[i];
+          label.psr_satclk_corrected = gnssObsMsg.pseudorange_satclk_corrected[i];
+          label.psr_dev_preproc = gnssObsMsg.pseudorange_var[i];
+          label.psr_dev_measured = gnssObsMsg.pseudorange_var_measured[i];
+          label.dr = gnssObs.dr;
+          label.dr_raw = gnssObsMsg.deltarange_raw[i];
+          label.dr_satclk_corrected = gnssObsMsg.deltarange_satclk_corrected[i];
+          label.dr_dev_preproc = gnssObsMsg.deltarange_var[i];
+          label.cp = gnssObs.cp;
+          label.cp_raw = gnssObsMsg.carrierphase_raw[i];
+          label.cp_satclk_corrected = gnssObsMsg.carrierphase_satclk_corrected[i];
+          label.cp_dev_measured = gnssObsMsg.carrierphase_var_measured[i];
+          label.locktime = gnssObs.locktime;
+          label.cn0 = gnssObsMsg.cn0[i];
+          label.elevation_angle = gnssObs.el;
+          label.azimuth_angle = gnssObsMsg.azimuth_angle[i];
+          satLabels->emplace_back(label);
+        }
+        gnssObsVec.emplace_back(gnssObs);
+      }
+    }
+    */
 
   public:
     explicit GNSSTCIntegrator() = default;
 
     void initialize(rclcpp::Node &node, fgo::graph::GraphBase &graphPtr, const std::string &integratorName,
                     bool isPrimarySensor = false) override;
-
-    //Todo: @haoming this is ugly!
-    fgo::integrator::param::IntegratorGNSSTCParamsPtr getIntegratorParamPtr() { return paramPtr_; };
 
     bool addFactors(const boost::circular_buffer<std::pair<double, gtsam::Vector3>> &timestampGyroMap,
                     const boost::circular_buffer<std::pair<size_t, gtsam::Vector6>> &stateIDAccMap,
@@ -159,9 +263,9 @@ namespace fgo::integrator {
                                 const gtsam::Key &cbdJ,
                                 const std::vector<fgo::data::GNSSObs> &obsVector,
                                 const int &antenna) {
-      auto levelArm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        levelArm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
 
       for (const auto &obs: obsVector) {
@@ -170,7 +274,7 @@ namespace fgo::integrator {
                                                         (gtsam::Vector1() << prVar).finished(),
                                                         paramPtr_->robustParameterPRDR);
 
-        graphPtr_->emplace_shared<fgo::factor::PrFactor>(poseJ, cbdJ, obs.pr, obs.satPos, levelArm, noiseModel);
+        graphPtr_->emplace_shared<fgo::factor::PrFactor>(poseJ, cbdJ, obs.pr, obs.satPos, leverArm, noiseModel);
       }
     }
 
@@ -180,9 +284,9 @@ namespace fgo::integrator {
                                           const std::vector<fgo::data::GNSSObs> &obsVector,
                                           const std::shared_ptr<fgo::models::GPInterpolator> &interpolator,
                                           const int &antenna) {
-      auto level_arm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        level_arm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
       for (auto &obs: obsVector) {
         auto prVar = obs.prVar;
@@ -194,7 +298,7 @@ namespace fgo::integrator {
         graphPtr_->emplace_shared<fgo::factor::GPInterpolatedPrFactor>(pose_i, vel_i, omega_i,
                                                                        pose_j, vel_j, omega_j,
                                                                        cbd_i, obs.pr, obs.satPos, obs.satVel,
-                                                                       level_arm,
+                                                                       leverArm,
                                                                        noiseModel, interpolator,
                                                                        paramPtr_->AutoDiffGPInterpolatedFactor);
 
@@ -205,16 +309,16 @@ namespace fgo::integrator {
                                 const std::vector<fgo::data::GNSSObs> &obsVector,
                                 const gtsam::Vector3 &omegaUnBiased,
                                 const int &antenna) {
-      auto levelArm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        levelArm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
       for (const auto &obs: obsVector) {
         const auto noiseModel = graph::assignNoiseModel(paramPtr_->noiseModelPRDR,
                                                         (gtsam::Vector1() << obs.drVar).finished(),
                                                         paramPtr_->robustParameterPRDR);
 
-        graphPtr_->emplace_shared<fgo::factor::DrFactor>(pose_i, vel_i, cbd_i, obs.dr, obs.satPos, obs.satVel, levelArm,
+        graphPtr_->emplace_shared<fgo::factor::DrFactor>(pose_i, vel_i, cbd_i, obs.dr, obs.satPos, obs.satVel, leverArm,
                                                          omegaUnBiased, noiseModel);
       }
     }
@@ -225,9 +329,9 @@ namespace fgo::integrator {
                                           const std::vector<fgo::data::GNSSObs> &obsVector,
                                           const std::shared_ptr<fgo::models::GPInterpolator> &interpolator,
                                           const int &antenna) {
-      auto level_arm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        level_arm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
       for (auto &obs: obsVector) {
         const auto noiseModel = graph::assignNoiseModel(paramPtr_->noiseModelPRDR,
@@ -235,7 +339,7 @@ namespace fgo::integrator {
                                                         paramPtr_->robustParameterPRDR);
         graphPtr_->emplace_shared<fgo::factor::GPInterpolatedDrFactor>(pose_i, vel_i, omega_i,
                                                                        pose_j, vel_j, omega_j, cbd_i, obs.dr,
-                                                                       obs.satPos, obs.satVel, level_arm,
+                                                                       obs.satPos, obs.satVel, leverArm,
                                                                        noiseModel, interpolator,
                                                                        paramPtr_->AutoDiffGPInterpolatedFactor);
       }
@@ -248,9 +352,9 @@ namespace fgo::integrator {
                                   const std::vector<fgo::data::GNSSObs> &obsVector,
                                   const gtsam::Vector3 &omegaUnbiased,
                                   const int &antenna) {
-      auto levelArm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        levelArm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
 
       for (const auto &obs: obsVector) {
@@ -281,7 +385,7 @@ namespace fgo::integrator {
                                                         paramPtr_->robustParameterPRDR);
 
         graphPtr_->emplace_shared<fgo::factor::PrDrFactor>(poseJ, velJ, biasJ, cbdJ, obs.pr, obs.dr,
-                                                           obs.satPos, obs.satVel, levelArm, omegaUnbiased, noiseModel,
+                                                           obs.satPos, obs.satVel, leverArm, omegaUnbiased, noiseModel,
                                                            paramPtr_->AutoDiffNormalFactor);
       }
 
@@ -294,9 +398,9 @@ namespace fgo::integrator {
                                     const std::vector<fgo::data::GNSSObs> &obsVector,
                                     const std::shared_ptr<fgo::models::GPInterpolator> &interpolator,
                                     const int &antenna) {
-      auto level_arm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        level_arm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
       for (auto &obs: obsVector) {
         if (!obs.isLOS) {
@@ -312,7 +416,7 @@ namespace fgo::integrator {
                                                         paramPtr_->robustParameterPRDR);
         graphPtr_->emplace_shared<fgo::factor::GPInterpolatedPrDrFactor>(pose_i, vel_i, omega_i, pose_j,
                                                                          vel_j, omega_j, cbd_i, obs.pr, obs.dr,
-                                                                         obs.satPos, obs.satVel, level_arm,
+                                                                         obs.satPos, obs.satVel, leverArm,
                                                                          noiseModel, interpolator,
                                                                          paramPtr_->AutoDiffGPInterpolatedFactor);
       }
@@ -323,9 +427,9 @@ namespace fgo::integrator {
                                     const fgo::data::RefSat &refSat,
                                     const gtsam::Vector3 &posBase, const gtsam::Vector3 &omegaUnbiased,
                                     const int &antenna) {
-      auto level_arm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        level_arm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
 
       for (auto &obs: obsVector) {
@@ -338,7 +442,7 @@ namespace fgo::integrator {
 
         graphPtr_->emplace_shared<fgo::factor::DDPrDrFactor>(
           pose_j, vel_j, obs.pr, 0, refSat.refSatPos, refSat.refSatVel, obs.satPos, obs.satVel,
-          posBase, level_arm, omegaUnbiased, noiseModel);
+          posBase, leverArm, omegaUnbiased, noiseModel);
       }
     }
 
@@ -349,9 +453,9 @@ namespace fgo::integrator {
                                   const fgo::data::RefSat &refSat, const gtsam::Vector3 &posBase,
                                   const std::shared_ptr<fgo::models::GPInterpolator> &interpolator,
                                   const int &antenna) {
-      auto level_arm = paramPtr_->transIMUToAnt1;
+      auto leverArm = baseToAntMainTrans_.translation();
       if (antenna == 2) {
-        level_arm = paramPtr_->transIMUToAnt2;
+        leverArm = baseToAntAuxTrans_.translation();
       }
       for (const auto &obs: obsVector) {
         auto prVar = obs.prVar;
@@ -362,7 +466,7 @@ namespace fgo::integrator {
         graphPtr_->emplace_shared<fgo::factor::GPInterpolatedDDPrDrFactor>(
           pose_i, vel_i, omega_i, pose_j, vel_j, omega_j,
           obs.pr, obs.dr, refSat.refSatPos, refSat.refSatVel, obs.satPos, obs.satVel,
-          posBase, level_arm, noiseModel, interpolator);
+          posBase, leverArm, noiseModel, interpolator);
       }
 
     }
@@ -388,7 +492,7 @@ namespace fgo::integrator {
 
           graphPtr_->emplace_shared<fgo::factor::DDCarrierPhaseFactor>(pose_j, amb_j, obs.cp, refSat.refSatPos,
                                                                        obs.satPos, posBase, nDDIntAmb_++,
-                                                                       paramPtr_->transIMUToAnt1,
+                                                                       baseToAntMainTrans_.translation(),
                                                                        paramPtr_->lambdaL1, noiseModel);
         }
 
@@ -480,8 +584,8 @@ namespace fgo::integrator {
                                                           paramPtr_->robustParameterDDCP);
           graphPtr_->emplace_shared<fgo::factor::DDCarrierPhaseFactor>(pose_j, amb_j, obs.cp, refSat.refSatPos,
                                                                        obs.satPos, nDDIntAmb_++,
-                                                                       paramPtr_->transIMUToAnt1,
-                                                                       paramPtr_->transIMUToAnt2, paramPtr_->lambdaL1,
+                                                                       baseToAntMainTrans_.translation(),
+                                                                       baseToAntAuxTrans_.translation(), paramPtr_->lambdaL1,
                                                                        noiseModel);
         }
       }
@@ -529,7 +633,7 @@ namespace fgo::integrator {
                                                                              pose_j, vel_j, omega_j, amb_j,
                                                                              obs.cp, posRefSat, posBase,
                                                                              obs.satPos, ddAmbInt,
-                                                                             paramPtr_->transIMUToAnt1,
+                                                                             baseToAntMainTrans_.translation(),
                                                                              paramPtr_->lambdaL1, noise_model,
                                                                              interpolator);
             break;
@@ -580,7 +684,7 @@ namespace fgo::integrator {
                   graphPtr_->emplace_shared<fgo::factor::TripleDiffCPFactor>(
                     X(lastState), pose_j, lastMeasRTCM[n].cp, obs.cp,
                     lastPosRefSat, lastMeasRTCM[n].satPos,
-                    posRefSat_j, obs.satPos, posBase, paramPtr_->transIMUToAnt1, paramPtr_->lambdaL1, noise_model);
+                    posRefSat_j, obs.satPos, posBase, baseToAntMainTrans_.translation(), paramPtr_->lambdaL1, noise_model);
                   //X(lastState)
                 }
               }
@@ -795,7 +899,7 @@ namespace fgo::integrator {
                 graphPtr_->emplace_shared<fgo::factor::TDNCPFactor>(point_1 - 1, cbd, last_amb, point_1, this_amb,
                                                                     oldObs.cp, obs.cp, oldObs.satPos, obs.satPos, i, j,
                                                                     dt,
-                                                                    paramPtr_->transIMUToAnt1, paramPtr_->lambdaL1,
+                                                                    baseToAntMainTrans_.translation(), paramPtr_->lambdaL1,
                                                                     noiseModel);
                 //std::cout << "dt: " << dt << " i: " << i << " j: " << j << " old: " << oldObs.satId << " current: " << obs.satId << std::endl;
               }
@@ -812,7 +916,7 @@ namespace fgo::integrator {
                 graphPtr_->emplace_shared<fgo::factor::TDNCPFactor>(point_1, cbd, last_amb, point_2, this_amb,
                                                                     oldObs.cp, obs.cp, oldObs.satPos, obs.satPos, i, j,
                                                                     dt,
-                                                                    paramPtr_->transIMUToAnt1, paramPtr_->lambdaL1,
+                                                                    baseToAntMainTrans_.translation(), paramPtr_->lambdaL1,
                                                                     noiseModel);
               }
             } else {
@@ -835,7 +939,7 @@ namespace fgo::integrator {
                                                                                 this_amb,
                                                                                 oldObs.cp, obs.cp, oldObs.satPos,
                                                                                 obs.satPos, i, j,
-                                                                                paramPtr_->transIMUToAnt1,
+                                                                                baseToAntMainTrans_.translation(),
                                                                                 paramPtr_->lambdaL1,
                                                                                 noiseModel, interpolator_i,
                                                                                 interpolator_j);
@@ -912,12 +1016,12 @@ namespace fgo::integrator {
                 graphPtr_->emplace_shared<fgo::factor::GPInterpolated3TDCpFactor>(
                   X(stateJ - 1), V(stateJ - 1), W(stateJ - 1), pose_i, vel_i, omega_i, pose_j, vel_j, omega_j,
                   lastSat.cp, obs.cp, lastPosRefSat, lastSat.satPos, posRefSat, obs.satPos, posBase,
-                  paramPtr_->transIMUToAnt1, paramPtr_->lambdaL1, noise_model, interpolator_i, interpolator_j);
+                  baseToAntMainTrans_.translation(), paramPtr_->lambdaL1, noise_model, interpolator_i, interpolator_j);
               } else {
                 graphPtr_->emplace_shared<fgo::factor::GPInterpolatedTDCpFactor>(
                   pose_i, vel_i, omega_i, pose_j, vel_j, omega_j, lastSat.cp, obs.cp,
                   lastPosRefSat, lastSat.satPos, posRefSat, obs.satPos, posBase,
-                  paramPtr_->transIMUToAnt1, paramPtr_->lambdaL1, noise_model, interpolator_i, interpolator_j);
+                  baseToAntMainTrans_.translation(), paramPtr_->lambdaL1, noise_model, interpolator_i, interpolator_j);
               }
             }
           }

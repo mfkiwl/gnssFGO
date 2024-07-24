@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -34,8 +34,8 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
 #include "utils/NavigationTools.h"
-#include "include/factor/FactorTypes.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorType.h"
+#include "factor/FactorTypeID.h"
 
 #include "third_party/matlab_utils.h"
 

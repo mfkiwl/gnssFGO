@@ -37,7 +37,7 @@
         addGPPriorFactor: true
         gpType: 'WNOJ'  # 'WNOA'
         addGPInterpolatedFactor: true
-        useEstimatedVarianceAfterInit: false
+        addEstimatedVarianceAfterInit: false
 
         AutoDiffNormalFactor: true
         AutoDiffGPInterpolatedFactor: true
@@ -61,22 +61,12 @@
         VoteNearZeroVelocity: 0.1 # 20%
         NoOptimizationAfterStates: 0
 
-      VehicleParameters:
-        # Parrameters DELoco
-        transIMUToReference: [ 0.3665, -0.628, -0.2383 ] # [0.0, 0.0, 0.0]
-        rotIMUToReference: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
-        transIMUToGNSSAnt1: [ 0.3665, -0.628, -0.2383 ] # [0.0, 0.0, 0.0]
-        transIMUToGNSSAnt2: [ 0.3665, 0.619, -0.2383 ] # [0.0, 0.0, 0.0]
-        transIMUToLiDAR: [ 0.301411, 0., -0.0596 ]
-        rotIMUToLiDAR: [ 1., 0., 0., 0., -1., 0., 0., 0., -1. ]
-        transIMUToCorrevit: [ -1.78, 0., 1.2 ]
-
-      Integrators: [ "GNSSTCIntegrator", "LIOIntegrator" ]   # ["GNSSTCIntegrator", "LIOIntegrator"]
+      Integrators: [ "GNSSTCIntegrator",  ]   # ["GNSSTCIntegrator", "LIOIntegrator"]
 
       Optimizer:
         #undefined, BatchFixedLag, IncrementalFixedLag
         smootherType: "IncrementalFixedLag"
-        smootherLag: 5. #marginalization threshhold
+        smootherLag: 3. #marginalization threshhold
         QcGPWNOJInterpolatorFull: [ 10000., 10000., 10000., 100000., 100000., 100000. ]
         QcGPWNOJMotionPriorFull: [ 10000., 10000., 10000., 100000., 100000., 100000. ]
         #QcGPWNOJInterpolatorFull: [ 100000., 100000., 100000., 100000., 100000., 100000. ]

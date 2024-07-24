@@ -29,8 +29,8 @@
 #include <gtsam/navigation/ImuBias.h>
 
 #include "model/gp_interpolator/GPInterpolatorBase.h"
-#include "include/factor/FactorTypes.h"
-#include "factor/FactorTypeIDs.h"
+#include "include/factor/FactorType.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
 * Keys: pose of time i&j X(i)&X(j), velocity of time i&j V(i)&V(j), clock bias drift of time i C(i)
@@ -82,8 +82,7 @@ namespace fgo::factor {
                            const gtsam::SharedNoiseModel &model,
                            const std::shared_ptr<fgo::models::GPInterpolator> &interpolator, bool useAutoDiff = false) :
       Interpolator(model, pose_i, vel_i, omega_i, pose_j, vel_j, omega_j, cbd_i), measRho_(measRho), lb_(lb),
-      satXYZ_(satXYZ), satVEL_(satVEL), tau_(interpolator->getTau()), useAutoDiff_(useAutoDiff),
-      GPbase_(interpolator) {
+      satXYZ_(satXYZ), satVEL_(satVEL), tau_(interpolator->getTau()), useAutoDiff_(useAutoDiff), GPbase_(interpolator) {
       factorTypeID_ = FactorTypeID::GPPR;
       factorName_ = "GPInterpolatedPrFactor";
     }
@@ -114,13 +113,13 @@ namespace fgo::factor {
       if (useAutoDiff_) {
         if (H1)
           *H1 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Pose3>(
-            boost::bind(&This::evaluateError_, this, boost::placeholders::_1, vel1, omega1, pose2, vel2, omega2,
-                        cbd1), pose1);
+            boost::bind(&This::evaluateError_, this, boost::placeholders::_1, vel1, omega1, pose2, vel2, omega2, cbd1),
+            pose1);
 
         if (H2)
           *H2 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
-            boost::bind(&This::evaluateError_, this, pose1, boost::placeholders::_1, omega1, pose2, vel2, omega2,
-                        cbd1), vel1);
+            boost::bind(&This::evaluateError_, this, pose1, boost::placeholders::_1, omega1, pose2, vel2, omega2, cbd1),
+            vel1);
 
         if (H3)
           *H3 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
@@ -129,13 +128,13 @@ namespace fgo::factor {
 
         if (H4)
           *H4 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Pose3>(
-            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, boost::placeholders::_1, vel2, omega2,
-                        cbd1), pose2);
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, boost::placeholders::_1, vel2, omega2, cbd1),
+            pose2);
 
         if (H5)
           *H5 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
-            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, boost::placeholders::_1, omega2,
-                        cbd1), vel2);
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, boost::placeholders::_1, omega2, cbd1),
+            vel2);
 
         if (H6)
           *H6 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector3>(
@@ -144,8 +143,8 @@ namespace fgo::factor {
 
         if (H7)
           *H7 = gtsam::numericalDerivative11<gtsam::Vector1, gtsam::Vector2>(
-            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, omega2,
-                        boost::placeholders::_1), cbd1);
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, omega2, boost::placeholders::_1),
+            cbd1);
 
         return evaluateError_(pose1, vel1, omega1, pose2, vel2, omega2, cbd1);
       } else {
@@ -169,15 +168,23 @@ namespace fgo::factor {
         gtsam::Matrix H1_rho, H2_rho, H3_rho, H4_rho, H5_rho, H6_rho;
 
         if (H1 || H2 || H3 || H4 || H5 || H6) {
-          gtsam::Matrix tmp_rho = Hd * (Hpose_P + Hrho_p * Hpose_Pr);
-          if (H1) *H1 = tmp_rho * Hint1_P;
-          if (H2) *H2 = tmp_rho * Hint2_P;
-          if (H3) *H3 = tmp_rho * Hint3_P;
-          if (H4) *H4 = tmp_rho * Hint4_P;
-          if (H5) *H5 = tmp_rho * Hint5_P;
-          if (H6) *H6 = tmp_rho * Hint6_P;
-          if (H7) *H7 = (gtsam::Matrix12() << 1, tau_).finished();
+          gtsam::Matrix tmp_rho = Hrho_p * Hpose_Pr;
+          H1_rho = Hd * (Hpose_P + tmp_rho) * Hint1_P;
+          H2_rho = Hd * (Hpose_P + tmp_rho) * Hint2_P;
+          H3_rho = Hd * (Hpose_P + tmp_rho) * Hint3_P;
+          H4_rho = Hd * (Hpose_P + tmp_rho) * Hint4_P;
+          H5_rho = Hd * (Hpose_P + tmp_rho) * Hint5_P;
+          H6_rho = Hd * (Hpose_P + tmp_rho) * Hint6_P;
         }
+
+        if (H1) *H1 = (gtsam::Matrix16() << H1_rho, 0, 0, 0).finished();
+        if (H2) *H2 = (gtsam::Matrix13() << H2_rho).finished();
+        if (H3) *H3 = (gtsam::Matrix13() << H3_rho).finished();
+        if (H4) *H4 = (gtsam::Matrix16() << H4_rho, 0, 0, 0).finished();
+        if (H5) *H5 = (gtsam::Matrix13() << H5_rho).finished();
+        if (H6) *H6 = (gtsam::Matrix13() << H6_rho).finished();
+        if (H7) *H7 = (gtsam::Matrix12() << 1, tau_, 0, 1).finished();
+
         return (gtsam::Vector1() << real_range + cbd1(0) + tau_ * cbd1(1) - measRho_).finished();
       }
 
@@ -268,270 +275,6 @@ namespace fgo::factor {
       ar & BOOST_SERIALIZATION_NVP(measRho_);
     }
   }; // PrDrFactor
-
-  class GPInterpolatedPrFactorFull
-    : public NoiseModelFactor9<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6,
-      gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6, gtsam::Vector2> {
-  private:
-    double measRho_{}; /** measurement */
-    gtsam::Point3 lb_; ///< The pose of the sensor in the body frame
-    gtsam::Vector3 satXYZ_;
-    gtsam::Vector3 satVEL_;
-    double tau_{};
-    bool useAutoDiff_ = false;
-
-    typedef GPInterpolatedPrFactorFull This;
-    typedef NoiseModelFactor9<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6,
-      gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6, gtsam::Vector2> Interpolator;
-    typedef std::shared_ptr<fgo::models::GPInterpolator> GPBase;
-
-    // interpolator
-    GPBase GPbase_;
-  public:
-
-    GPInterpolatedPrFactorFull() = default; /* Default constructor */
-
-    /**
-     * Constructor
-     * @param body_P_sensor transformation from body to sensor
-     */
-    GPInterpolatedPrFactorFull(gtsam::Key pose_i, gtsam::Key vel_i, gtsam::Key omega_i, gtsam::Key acc_i,
-                               gtsam::Key pose_j, gtsam::Key vel_j, gtsam::Key omega_j, gtsam::Key acc_j,
-                               gtsam::Key cbd_i,
-                               const double &measRho,
-                               const gtsam::Vector3 &satXYZ, const gtsam::Vector3 &satVEL, gtsam::Vector3 &lb,
-                               const gtsam::SharedNoiseModel &model,
-                               const std::shared_ptr<fgo::models::GPInterpolator> &interpolator,
-                               bool useAutoDiff = false) :
-      Interpolator(model, pose_i, vel_i, omega_i, acc_i, pose_j, vel_j, omega_j, acc_j, cbd_i),
-      measRho_(measRho), lb_(lb), satXYZ_(satXYZ), satVEL_(satVEL), tau_(interpolator->getTau()),
-      useAutoDiff_(useAutoDiff), GPbase_(interpolator) {
-      factorTypeID_ = FactorTypeID::GPPR;
-      factorName_ = "GPInterpolatedPrFactorFull";
-    }
-
-    ~GPInterpolatedPrFactorFull(
-    ) override = default;
-
-    /// @return a deep copy of this factor
-    [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
-      return boost::static_pointer_cast<gtsam::NonlinearFactor>(
-        gtsam::NonlinearFactor::shared_ptr(new This(*this)));
-    }
-
-    /** factor error */
-    [[nodiscard]] gtsam::Vector
-    evaluateError(const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
-                  const gtsam::Vector6 &acc1,
-                  const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2, const gtsam::Vector3 &omega2,
-                  const gtsam::Vector6 &acc2,
-                  const gtsam::Vector2 &cbd1,
-                  boost::optional<gtsam::Matrix &> H1 = boost::none,
-                  boost::optional<gtsam::Matrix &> H2 = boost::none,
-                  boost::optional<gtsam::Matrix &> H3 = boost::none,
-                  boost::optional<gtsam::Matrix &> H4 = boost::none,
-                  boost::optional<gtsam::Matrix &> H5 = boost::none,
-                  boost::optional<gtsam::Matrix &> H6 = boost::none,
-                  boost::optional<gtsam::Matrix &> H7 = boost::none,
-                  boost::optional<gtsam::Matrix &> H8 = boost::none,
-                  boost::optional<gtsam::Matrix &> H9 = boost::none) const override {
-      using namespace gtsam;
-
-      if (useAutoDiff_) {
-        if (H1)
-          *H1 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Pose3>(
-            std::bind(&This::evaluateError_, this, std::placeholders::_1, vel1, omega1, acc1, pose2, vel2,
-                      omega2, acc2, cbd1), pose1);
-
-        if (H2)
-          *H2 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, std::placeholders::_1, omega1, acc1, pose2,
-                      vel2, omega2, acc2, cbd1), vel1);
-
-        if (H3)
-          *H3 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, std::placeholders::_1, acc1, pose2, vel2,
-                      omega2, acc2, cbd1), omega1);
-
-        if (H4)
-          *H4 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector6>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, std::placeholders::_1, pose2, vel2,
-                      omega2, acc2, cbd1), acc1);
-
-        if (H5)
-          *H5 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Pose3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, acc1, std::placeholders::_1, vel2,
-                      omega2, acc2, cbd1), pose2);
-
-        if (H6)
-          *H6 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, acc1, pose2,
-                      std::placeholders::_1, omega2, acc2, cbd1), vel2);
-
-        if (H7)
-          *H7 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, acc1, pose2, vel2,
-                      std::placeholders::_1, acc2, cbd1), omega2);
-
-        if (H8)
-          *H8 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector6>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, acc1, pose2, vel2, omega2,
-                      std::placeholders::_1, cbd1), acc2);
-
-        if (H9)
-          *H9 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector2>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, acc1, pose2, vel2, omega2,
-                      acc2, std::placeholders::_1), cbd1);
-
-        return evaluateError_(pose1, vel1, omega1, acc1, pose2, vel2, omega2, acc2, cbd1);
-      } else {
-        gtsam::Matrix Hint1_P, Hint2_P, Hint3_P, Hint4_P, Hint5_P, Hint6_P, Hint7_P, Hint8_P;
-        gtsam::Pose3 pose;
-
-        if (H1 || H2 || H3 || H4 || H5 || H6) {
-          pose = GPbase_->interpolatePose(pose1, vel1, omega1, acc1, pose2, vel2, omega2, acc2,
-                                          Hint1_P, Hint2_P, Hint3_P, Hint4_P, Hint5_P, Hint6_P, Hint7_P, Hint8_P);
-        } else {
-          pose = GPbase_->interpolatePose(pose1, vel1, omega1, acc1, pose2, vel2, omega2, acc2);
-        }
-
-        gtsam::Matrix Hpose_P, Hpose_Pr, Hpose_r;     // jacobian of pose
-        gtsam::Matrix3 Hrho_p;
-        gtsam::Matrix13 Hd;
-
-        gtsam::Point3 P_eA_e = pose.translation(&Hpose_P) + pose.rotation(&Hpose_Pr).rotate(lb_, &Hrho_p);
-        double real_range = gtsam::distance3(P_eA_e, satXYZ_, &Hd);
-
-        if (H1 || H2 || H3 || H4 || H5 || H6 || H7 || H8) {
-          gtsam::Matrix tmp_rho = Hd * (Hpose_P + Hrho_p * Hpose_Pr);
-
-          if (H1) {
-            //    1x3   3x6       3x6         6x6
-            *H1 = tmp_rho * Hint1_P;
-          }
-
-          if (H2) {
-            *H2 = tmp_rho * Hint2_P;
-          }
-
-          if (H3) {
-            *H3 = tmp_rho * Hint3_P;
-          }
-
-          if (H4) {
-            *H4 = tmp_rho * Hint4_P;
-          }
-
-          if (H5) {
-            *H5 = tmp_rho * Hint5_P;
-          }
-
-          if (H6) { *H6 = tmp_rho * Hint6_P; }
-          if (H7) *H7 = tmp_rho * Hint7_P;
-          if (H8) *H8 = tmp_rho * Hint8_P;
-          if (H9) *H9 = (gtsam::Matrix12() << 1, tau_).finished();
-        }
-
-        return (gtsam::Vector1() << real_range + cbd1(0) + tau_ * cbd1(1) - measRho_).finished();
-      }
-
-    }
-
-    [[nodiscard]] gtsam::Vector
-    evaluateError_(const gtsam::Pose3 &pose1, const gtsam::Vector3 &vel1, const gtsam::Vector3 &omega1,
-                   const gtsam::Vector6 &acc1,
-                   const gtsam::Pose3 &pose2, const gtsam::Vector3 &vel2, const gtsam::Vector3 &omega2,
-                   const gtsam::Vector6 &acc2,
-                   const gtsam::Vector2 &cbd1) const {
-      // get position
-      gtsam::Pose3 pose = GPbase_->interpolatePose(pose1, vel1, omega1, acc1, pose2, vel2, omega2, acc2);
-      gtsam::Point3 positionReceiver = pose.translation() + pose.rotation() * lb_;
-      //error pos
-      gtsam::Matrix13 e;
-      double distance = gtsam::distance3(positionReceiver, satXYZ_, e); //distance between receiver and sat
-      double err = distance + cbd1(0) + tau_ * cbd1(1) - measRho_;
-
-      return gtsam::Vector1(err);
-    }
-
-    /** lifting all related state values in a vector after the ordering for evaluateError **/
-    gtsam::Vector liftValuesAsVector(const gtsam::Values &values) override {
-      const auto poseI = values.at<gtsam::Pose3>(key1());
-      const auto velI = values.at<gtsam::Vector3>(key2());
-      const auto omegaI = values.at<gtsam::Vector3>(key3());
-      const auto accI = values.at<gtsam::Vector6>(key4());
-
-      const auto poseJ = values.at<gtsam::Pose3>(key5());
-      const auto velJ = values.at<gtsam::Vector3>(key6());
-      const auto omegaJ = values.at<gtsam::Vector3>(key7());
-      const auto accJ = values.at<gtsam::Vector6>(key8());
-
-      const auto cbd1 = values.at<gtsam::Vector2>(key9());
-
-      const auto liftedStates = (gtsam::Vector(38) << poseI.rotation().rpy(),
-        poseI.translation(),
-        velI, omegaI, accI,
-        poseJ.rotation().rpy(),
-        poseJ.translation(),
-        velJ, omegaJ, accJ, cbd1).finished();
-      return liftedStates;
-    }
-
-    gtsam::Values generateValuesFromStateVector(const gtsam::Vector &state) override {
-      assert(state.size() != 38);
-      gtsam::Values values;
-      try {
-        values.insert(key1(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(0, 0)),
-                                           gtsam::Point3(state.block<3, 1>(3, 0))));
-        values.insert(key2(), gtsam::Vector3(state.block<3, 1>(6, 0)));
-        values.insert(key3(), gtsam::Vector3(state.block<3, 1>(9, 0)));
-        values.insert(key4(), gtsam::Vector6(state.block<6, 1>(12, 0)));
-
-        values.insert(key5(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(18, 0)),
-                                           gtsam::Point3(state.block<3, 1>(21, 0))));
-        values.insert(key6(), gtsam::Vector3(state.block<3, 1>(24, 0)));
-        values.insert(key7(), gtsam::Vector3(state.block<3, 1>(27, 0)));
-        values.insert(key8(), gtsam::Vector6(state.block<6, 1>(30, 0)));
-        values.insert(key9(), gtsam::Vector2(state.block<2, 1>(37, 0)));
-      }
-      catch (std::exception &ex) {
-        std::cout << "Factor " << getName() << " cannot generate values from state vector " << state << " due to "
-                  << ex.what() << std::endl;
-      }
-      return values;
-    }
-
-    /** return the measured */
-    [[nodiscard]] gtsam::Vector1 measured() const {
-      return (gtsam::Vector1() << measRho_).finished();
-    }
-
-    /** equals specialized to this factor */
-    [[nodiscard]] bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
-      const This *e = dynamic_cast<const This *> (&expected);
-      return e != NULL && Base::equals(*e, tol)
-             && gtsam::equal_with_abs_tol((gtsam::Vector1() << this->measRho_).finished(),
-                                          (gtsam::Vector1() << e->measRho_).finished(), tol);
-    }
-
-    /** print contents */
-    void print(const std::string &s = "",
-               const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
-      std::cout << s << "GPInterpolatedPrFactorFull" << std::endl;
-      Base::print("", keyFormatter);
-    }
-
-  private:
-    /** Serialization function */
-    friend class boost::serialization::access;
-
-    template<class ARCHIVE>
-    void serialize(ARCHIVE &ar, const unsigned int version) {
-      ar & boost::serialization::make_nvp("GPInterpolatedPrFactorFull",
-                                          boost::serialization::base_object<Base>(*this));
-      ar & BOOST_SERIALIZATION_NVP(measRho_);
-    }
-  }; // PrDrFactor
 } //namespace
 
 
@@ -540,11 +283,6 @@ namespace gtsam {
   template<>
   struct traits<fgo::factor::GPInterpolatedPrFactor> :
     public Testable<fgo::factor::GPInterpolatedPrFactor> {
-  };
-
-  template<>
-  struct traits<fgo::factor::GPInterpolatedPrFactorFull> :
-    public Testable<fgo::factor::GPInterpolatedPrFactorFull> {
   };
 }
 

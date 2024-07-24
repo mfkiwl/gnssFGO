@@ -17,7 +17,6 @@
 //
 
 #pragma once
-
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -30,7 +29,7 @@
 #include <gtsam/base/numericalDerivative.h>
 #include "utils/NavigationTools.h"
 #include "factor/GenericTypes.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
 * Keys: pose of time i X(i), velocity of time i V(i), clock bias drift of time i C(i)
@@ -46,245 +45,206 @@
  * */
 
 namespace fgo::factors {
-  class PrFactorGMM : public MixtureModelFactor3<gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> {
+    class PrFactorGMM : public MixtureModelFactor3<gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> {
 
-  protected:
-    gtsam::Vector3 satXYZ_;
-    gtsam::Vector3 lb_;//lever arm between IMU and antenna in body frame
-    double measRho_;
-    typedef PRFactorGMM This;
-    typedef MixtureModelFactor3 <gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> Base;
+    protected:
+      gtsam::Vector3 satXYZ_;
+      gtsam::Vector3 lb_;//lever arm between IMU and antenna in body frame
+      double measRho_;
+      typedef PRFactorGMM This;
+      typedef MixtureModelFactor3<gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> Base;
 
-  public:
+    public:
 
-    PrFactorGMM() = default;  /* Default constructor */
+        PrFactorGMM() = default;  /* Default constructor */
 
-    /**
-     * @param betweenMeasured odometry measurement [dx dy dtheta] in body frame
-     */
-    PrFactorGMM(gtsam::Key pose_i, gtsam::Key cbd_i, gtsam::Key weight_i, const double &measRho,
-                const gtsam::Vector3 &satXYZ, const gtsam::Vector3 &lb, const gtsam::SharedNoiseModel &model) :
-      Base(model, pose_i, cbd_i, weight_i), satXYZ_(satXYZ),
-      lb_(lb), measRho_(measRho) {
-      factorTypeID_ = FactorTypeIDs::PRGMM;
-      factorName_ = "PrGMMFactor";
-    }
+      /**
+       * @param betweenMeasured odometry measurement [dx dy dtheta] in body frame
+       */
+      PrFactorGMM(gtsam::Key pose_i, gtsam::Key cbd_i, gtsam::Key weight_i, const double &measRho,
+                  const gtsam::Vector3 &satXYZ, const gtsam::Vector3 &lb, const gtsam::SharedNoiseModel &model) :
+                  Base(model, pose_i, cbd_i, weight_i), satXYZ_(satXYZ),
+                  lb_(lb), measRho_(measRho)
+                  {
+                    factorTypeID_ = FactorTypeIDs::PRGMM;
+                    factorName_ = "PrGMMFactor";
+                  }
 
-    ~PrFactorGMM() override = default;
+      ~PrFactorGMM() override = default;
 
-    /// @return a deep copy of this factor
-    [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
-      return boost::static_pointer_cast<gtsam::NonlinearFactor>(
-        gtsam::NonlinearFactor::shared_ptr(new This(*this)));
-    }
-
-    [[nodiscard]] gtsam::Vector
-    evaluateError(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight,
-                  boost::optional<gtsam::Matrix &> H1 = boost::none,
-                  boost::optional<gtsam::Matrix &> H2 = boost::none,
-                  boost::optional<gtsam::Matrix &> H3 = boost::none) const override {
-
-      if (H1) {
-        *H1 = gtsam::numericalDerivative31<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
-          boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2,
-                      boost::placeholders::_3), pose, cbd, weight, 1e-5);
+      /// @return a deep copy of this factor
+      [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
+        return boost::static_pointer_cast<gtsam::NonlinearFactor>(
+                gtsam::NonlinearFactor::shared_ptr(new This(*this)));
       }
-      if (H2)
-        *H2 = gtsam::numericalDerivative32<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
-          boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2,
-                      boost::placeholders::_3), pose, cbd, weight, 1e-5);
-      if (H3)
-        *H3 = gtsam::numericalDerivative33<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
-          boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2,
-                      boost::placeholders::_3), pose, cbd, weight, 1e-5);
 
-      return evaluateError_(pose, cbd, weight);
+      [[nodiscard]] gtsam::Vector evaluateError(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight,
+                                                boost::optional<gtsam::Matrix &> H1 = boost::none,
+                                                boost::optional<gtsam::Matrix &> H2 = boost::none,
+                                                boost::optional<gtsam::Matrix &> H3 = boost::none) const override {
 
-    }
+          if (H1) {
+            *H1 = gtsam::numericalDerivative31<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
+                    boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3), pose, cbd, weight, 1e-5);
+          }
+          if (H2)
+            *H2 = gtsam::numericalDerivative32<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
+                    boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3), pose, cbd, weight, 1e-5);
+          if (H3)
+              *H3 = gtsam::numericalDerivative33<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
+                      boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3), pose, cbd, weight, 1e-5);
 
-    [[nodiscard]] gtsam::Vector
-    evaluateError_(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight) const {
+        return evaluateError_(pose, cbd, weight);
 
-      const gtsam::Point3 &P_eb_e = pose.translation();
-      const gtsam::Rot3 &eRb = pose.rotation();
-      gtsam::Point3 P_eA_e = P_eb_e + eRb.rotate(lb_);
-      gtsam::Matrix13 Hd;
-      double real_range = gtsam::distance3(P_eA_e, satXYZ_, Hd);
-      //double logisticWeight = 1.0 / 1.0 + std::exp(-1.0 * weight.value());
-
-      return (gtsam::Vector1() << weight.cwiseAbs() * (real_range + cbd(0) - measRho_)).finished();
-
-    }
-
-    /** lifting all related state values in a vector after the ordering for evaluateError **/
-    gtsam::Vector liftValuesAsVector(const gtsam::Values &values) override {
-      const auto pose = values.at<gtsam::Pose3>(key1());
-      const auto vel = values.at<gtsam::Vector3>(key2());
-      const auto omega = values.at<gtsam::Vector3>(key3());
-      const auto liftedStates = (gtsam::Vector(12) << pose.rotation().rpy(),
-        pose.translation(),
-        vel, omega).finished();
-      return liftedStates;
-    }
-
-    gtsam::Values generateValuesFromStateVector(const gtsam::Vector &state) override {
-      assert(state.size() != 12);
-      gtsam::Values values;
-      try {
-        values.insert(key1(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(0, 0)),
-                                           gtsam::Point3(state.block<3, 1>(3, 0))));
-        values.insert(key2(), gtsam::Vector3(state.block<3, 1>(6, 0)));
-        values.insert(key3(), gtsam::Vector3(state.block<3, 1>(9, 0)));
       }
-      catch (std::exception &ex) {
-        std::cout << "Factor " << getName() << " cannot generate values from state vector " << state << " due to "
-                  << ex.what() << std::endl;
+
+      [[nodiscard]] gtsam::Vector evaluateError_(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight) const {
+
+        const gtsam::Point3& P_eb_e = pose.translation();
+        const gtsam::Rot3& eRb = pose.rotation();
+        gtsam::Point3 P_eA_e = P_eb_e + eRb.rotate(lb_);
+        gtsam::Matrix13 Hd;
+        double real_range = gtsam::distance3(P_eA_e, satXYZ_, Hd);
+        //double logisticWeight = 1.0 / 1.0 + std::exp(-1.0 * weight.value());
+
+        return (gtsam::Vector1() << weight.cwiseAbs() * (real_range + cbd(0) - measRho_)).finished();
+
       }
-      return values;
-    }
 
-    /** return the measured */
-    gtsam::Vector1 measured() const {
-      return gtsam::Vector1(measRho_);
-    }
-
-    /** equals specialized to this factor */
-    bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
-      const This *e = dynamic_cast<const This *> (&expected);
-      return e != nullptr && Base::equals(*e, tol)
-             && gtsam::equal_with_abs_tol((gtsam::Vector1() << this->measRho_).finished(),
-                                          (gtsam::Vector1() << e->measRho_).finished(), tol);
-    }
-
-    /** print contents */
-    void print(const std::string &s = "",
-               const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
-      std::cout << s << "PRFactorGMM" << std::endl;
-      Base::print("", keyFormatter);
-    }
-
-  private:
-
-    /** Serialization function */
-    friend class boost::serialization::access;
-
-    template<class ARCHIVE>
-    void serialize(ARCHIVE &ar, const unsigned int version) {
-      ar & boost::serialization::make_nvp("PRFactorGMM",
-                                          boost::serialization::base_object<Base>(*this));
-      ar & BOOST_SERIALIZATION_NVP(measRho_);
-    }
-  }; // PRFactorGmm
-
-
-  class PrFactorMEst : public MixtureModelFactor3<gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> {
-
-  protected:
-    gtsam::Vector3 satXYZ_;
-    gtsam::Vector3 lb_;//lever arm between IMU and antenna in body frame
-    double measRho_;
-    typedef PRFactorMEst This;
-    typedef MixtureModelFactor3 <gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> Base;
-
-  public:
-
-    PrFactorMEst() = default;  /* Default constructor */
-
-    /**
-     * @param betweenMeasured odometry measurement [dx dy dtheta] in body frame
-     */
-    PrFactorMEst(gtsam::Key pose_i, gtsam::Key cbd_i, gtsam::Key weight_i, const double &measRho,
-                 const gtsam::Vector3 &satXYZ, const gtsam::Vector3 &lb, const gtsam::SharedNoiseModel &model) :
-      Base(model, pose_i, cbd_i, weight_i), satXYZ_(satXYZ),
-      lb_(lb), measRho_(measRho) {}
-
-    ~PrFactorMEst() override = default;
-
-    /// @return a deep copy of this factor
-    [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
-      return boost::static_pointer_cast<gtsam::NonlinearFactor>(
-        gtsam::NonlinearFactor::shared_ptr(new This(*this)));
-    }
-
-    [[nodiscard]] gtsam::Vector
-    evaluateError(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight,
-                  boost::optional<gtsam::Matrix &> H1 = boost::none,
-                  boost::optional<gtsam::Matrix &> H2 = boost::none,
-                  boost::optional<gtsam::Matrix &> H3 = boost::none) const override {
-
-      if (H1) {
-        *H1 = gtsam::numericalDerivative31<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
-          boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2,
-                      boost::placeholders::_3), pose, cbd, weight, 1e-5);
+      /** return the measured */
+      gtsam::Vector1 measured() const {
+        return gtsam::Vector1(measRho_);
       }
-      if (H2)
-        *H2 = gtsam::numericalDerivative32<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
-          boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2,
-                      boost::placeholders::_3), pose, cbd, weight, 1e-5);
-      if (H3)
-        *H3 = gtsam::numericalDerivative33<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
-          boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2,
-                      boost::placeholders::_3), pose, cbd, weight, 1e-5);
 
-      return evaluateError_(pose, cbd, weight);
+      /** equals specialized to this factor */
+      bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
+        const This *e = dynamic_cast<const This *> (&expected);
+        return e != nullptr && Base::equals(*e, tol)
+               && gtsam::equal_with_abs_tol((gtsam::Vector1() << this->measRho_).finished(),
+                                            (gtsam::Vector1() << e->measRho_).finished(), tol);
+      }
 
-    }
+      /** print contents */
+      void print(const std::string &s = "",
+                 const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
+        std::cout << s << "PRFactorGMM" << std::endl;
+        Base::print("", keyFormatter);
+      }
 
-    [[nodiscard]] gtsam::Vector
-    evaluateError_(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight) const {
+    private:
 
-      const gtsam::Point3 &P_eb_e = pose.translation();
-      const gtsam::Rot3 &eRb = pose.rotation();
-      gtsam::Point3 P_eA_e = P_eb_e + eRb.rotate(lb_);
-      gtsam::Matrix13 Hd;
-      double real_range = gtsam::distance3(P_eA_e, satXYZ_, Hd);
-      // double logisticWeight = 1.0 / 1.0 + std::exp(-1.0 * weight.value());
+      /** Serialization function */
+      friend class boost::serialization::access;
 
-      return (gtsam::Vector1()
-        << (gtsam::Vector1::Ones() - weight.cwiseAbs()) * (real_range + cbd(0) - measRho_)).finished();
+      template<class ARCHIVE>
+      void serialize(ARCHIVE &ar, const unsigned int version) {
+        ar & boost::serialization::make_nvp("PRFactorGMM",
+                                            boost::serialization::base_object<Base>(*this));
+        ar & BOOST_SERIALIZATION_NVP(measRho_);
+      }
+    }; // PRFactorGmm
 
-    }
 
-    /** return the measured */
-    [[nodiscard]] gtsam::Vector1 measured() const {
-      return gtsam::Vector1(measRho_);
-    }
+    class PrFactorMEst : public MixtureModelFactor3<gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> {
 
-    /** equals specialized to this factor */
-    [[nodiscard]] bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
-      const This *e = dynamic_cast<const This *> (&expected);
-      return e != NULL && Base::equals(*e, tol)
-             && gtsam::equal_with_abs_tol((gtsam::Vector1() << this->measRho_).finished(),
-                                          (gtsam::Vector1() << e->measRho_).finished(), tol);
-    }
+    protected:
+        gtsam::Vector3 satXYZ_;
+        gtsam::Vector3 lb_;//lever arm between IMU and antenna in body frame
+        double measRho_;
+        typedef PRFactorMEst This;
+        typedef MixtureModelFactor3<gtsam::Pose3, gtsam::Vector2, gtsam::Vector1> Base;
 
-    /** print contents */
-    void print(const std::string &s = "",
-               const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
-      std::cout << s << "PRFactorMEst" << std::endl;
-      Base::print("", keyFormatter);
-    }
+    public:
 
-  private:
+        PrFactorMEst() = default;  /* Default constructor */
 
-    /** Serialization function */
-    friend class boost::serialization::access;
+        /**
+         * @param betweenMeasured odometry measurement [dx dy dtheta] in body frame
+         */
+        PrFactorMEst(gtsam::Key pose_i, gtsam::Key cbd_i, gtsam::Key weight_i, const double &measRho,
+                     const gtsam::Vector3 &satXYZ, const gtsam::Vector3 &lb, const gtsam::SharedNoiseModel &model) :
+                     Base(model, pose_i, cbd_i, weight_i), satXYZ_(satXYZ),
+                     lb_(lb), measRho_(measRho) {}
 
-    template<class ARCHIVE>
-    void serialize(ARCHIVE &ar, const unsigned int version) {
-      ar & boost::serialization::make_nvp("PRFactorMEst",
-                                          boost::serialization::base_object<Base>(*this));
-      ar & BOOST_SERIALIZATION_NVP(measRho_);
-    }
-  }; // PRFactorMEst
-} // namespace fgo_online
+        ~PrFactorMEst() override = default;
+
+        /// @return a deep copy of this factor
+        [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
+            return boost::static_pointer_cast<gtsam::NonlinearFactor>(
+                    gtsam::NonlinearFactor::shared_ptr(new This(*this)));
+        }
+
+        [[nodiscard]] gtsam::Vector evaluateError(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight,
+                                                  boost::optional<gtsam::Matrix &> H1 = boost::none,
+                                                  boost::optional<gtsam::Matrix &> H2 = boost::none,
+                                                  boost::optional<gtsam::Matrix &> H3 = boost::none) const override {
+
+            if (H1) {
+                *H1 = gtsam::numericalDerivative31<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
+                        boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3), pose, cbd, weight, 1e-5);
+            }
+            if (H2)
+                *H2 = gtsam::numericalDerivative32<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
+                        boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3), pose, cbd, weight, 1e-5);
+            if (H3)
+                *H3 = gtsam::numericalDerivative33<gtsam::Vector1, gtsam::Pose3, gtsam::Vector2, gtsam::Vector1>(
+                        boost::bind(&This::evaluateError_, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3), pose, cbd, weight, 1e-5);
+
+            return evaluateError_(pose, cbd, weight);
+
+        }
+
+        [[nodiscard]] gtsam::Vector evaluateError_(const gtsam::Pose3 &pose, const gtsam::Vector2 &cbd, const gtsam::Vector1 &weight) const {
+
+            const gtsam::Point3& P_eb_e = pose.translation();
+            const gtsam::Rot3& eRb = pose.rotation();
+            gtsam::Point3 P_eA_e = P_eb_e + eRb.rotate(lb_);
+            gtsam::Matrix13 Hd;
+            double real_range = gtsam::distance3(P_eA_e, satXYZ_, Hd);
+            // double logisticWeight = 1.0 / 1.0 + std::exp(-1.0 * weight.value());
+
+            return (gtsam::Vector1() << (gtsam::Vector1::Ones() - weight.cwiseAbs()) * (real_range + cbd(0) - measRho_)).finished();
+
+        }
+
+        /** return the measured */
+        [[nodiscard]] gtsam::Vector1 measured() const {
+            return gtsam::Vector1(measRho_);
+        }
+
+        /** equals specialized to this factor */
+        [[nodiscard]] bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
+            const This *e = dynamic_cast<const This *> (&expected);
+            return e != NULL && Base::equals(*e, tol)
+                   && gtsam::equal_with_abs_tol((gtsam::Vector1() << this->measRho_).finished(),
+                                                (gtsam::Vector1() << e->measRho_).finished(), tol);
+        }
+
+        /** print contents */
+        void print(const std::string &s = "",
+                   const gtsam::KeyFormatter &keyFormatter = gtsam::DefaultKeyFormatter) const override {
+            std::cout << s << "PRFactorMEst" << std::endl;
+            Base::print("", keyFormatter);
+        }
+
+    private:
+
+        /** Serialization function */
+        friend class boost::serialization::access;
+
+        template<class ARCHIVE>
+        void serialize(ARCHIVE &ar, const unsigned int version) {
+            ar & boost::serialization::make_nvp("PRFactorMEst",
+                                                boost::serialization::base_object<Base>(*this));
+            ar & BOOST_SERIALIZATION_NVP(measRho_);
+        }
+    }; // PRFactorMEst
+  } // namespace fgo_online
 
 /// traits
 namespace gtsam {
   template<>
-  struct traits<fgo::factors::PrFactorGMM> : public Testable<fgo::factors::PrFactorGMM> {
-  };
+  struct traits<fgo::factors::PrFactorGMM> : public Testable<fgo::factors::PrFactorGMM> {};
   template<>
-  struct traits<fgo::factors::PrFactorMEst> : public Testable<fgo::factors::PrFactorMEst> {
-  };
+  struct traits<fgo::factors::PrFactorMEst> : public Testable<fgo::factors::PrFactorMEst> {};
 }

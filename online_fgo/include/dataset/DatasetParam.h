@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -34,6 +34,7 @@ namespace fgo::dataset {
     std::string bag_path;
     double max_bag_memory_usage = 4.; // in GB,
     std::vector<std::string> bag_fully_loaded_topics;
+    std::vector<std::string> excluded_topics;
     bool autoLoading = false;
     double start_offset = 0.;
     double pre_defined_duration = 0.;
@@ -49,6 +50,9 @@ namespace fgo::dataset {
 
       ::utils::RosParameter<std::vector<std::string>> bag_topic_filter_(dataset_name + ".fullyLoadedTopics", node);
       this->bag_fully_loaded_topics = bag_topic_filter_.value();
+
+      ::utils::RosParameter<std::vector<std::string>> excludedTopics_(dataset_name + ".excludedTopics", node);
+      this->excluded_topics = excludedTopics_.value();
 
       ::utils::RosParameter<bool> autoLoading_(dataset_name + ".autoLoading", true, node);
       this->autoLoading = autoLoading_.value();

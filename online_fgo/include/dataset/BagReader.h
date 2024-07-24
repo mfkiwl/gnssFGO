@@ -12,14 +12,14 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
 
 #ifndef ONLINE_FGO_BAGREADER_H
 #define ONLINE_FGO_BAGREADER_H
-
+#pragma once
 #include <map>
 #include <mutex>
 #include <thread>
@@ -32,14 +32,14 @@
 #include <rosbag2_cpp/readers/sequential_reader.hpp>
 #include <rclcpp/serialization.hpp>
 #include <rclcpp/serialized_message.hpp>
-#include <rosbag2_cpp/storage_options.hpp>
+///#include <rosbag2_cpp/storage_options.hpp>
 #include <rosbag2_cpp/converter_options.hpp>
 #include <ublox_msgs/msg/rxm_rawx.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 
-#include "utils/indicators/indicators.hpp"
-#include "sensor/GNSS/GNSSDataParser.h"
-#include "data/DataTypes.h"
+//#include "utils/indicators/indicators.hpp"
+//#include "sensor/gnss/GNSSDataParser.h"
+#include "data/DataTypesFGO.h"
 #include "dataset/DatasetParam.h"
 #include "data/BagUtils.h"
 #include "utils/GNSSUtils.h"
@@ -48,7 +48,7 @@ namespace fgo::dataset {
 
   /**
    * Design Idea: because we have different dataset for multiple research works, we only use the bag reader to read raw buffers
-   * the raw buffer will be interpreted / transformed into data object to be used.
+   * the raw data will be interpreted / transformed into data object to be used.
    * A problem should be considered: loading data from e.g., images will fire the RAM, so the loading action should be controlled
    * To do so: fetching buffers from the bag will be running in a separate thread,
    *           If the memory_usage_ is larger than a threshold, then the loop runs idle until the the memory_usage_ comes down
@@ -80,7 +80,7 @@ namespace fgo::dataset {
       rclcpp::Serialization<T> serialization;
       rclcpp::SerializedMessage extracted_serialized_msg(*data);
       serialization.deserialize_message(
-          &extracted_serialized_msg, &new_msg);
+        &extracted_serialized_msg, &new_msg);
       try {
         auto ros_timestamp = rclcpp::Time(new_msg.header.stamp.sec, new_msg.header.stamp.nanosec, RCL_ROS_TIME);
         return {ros_timestamp, new_msg};
@@ -91,7 +91,7 @@ namespace fgo::dataset {
       }
     }
 
-    //constructor: initial with Path of bag file and the topics of GNSS and IMU
+    //constructor: initial with Path of bag file and the topics of gnss and IMU
     explicit BagReader(const std::shared_ptr<DatasetParam> &param) : param_(param) {}
 
     ~BagReader() = default;
@@ -107,7 +107,8 @@ namespace fgo::dataset {
 
   public:
     void readFullDataFromBag() {
-      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO: Reading full dataset at " << param_->bag_path);
+      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
+                         "OfflineFGO: Reading full dataset at " << param_->bag_path);
       auto reader = std::make_shared<rosbag2_cpp::readers::SequentialReader>();
       rosbag2_storage::StorageOptions storage_options;
       storage_options.uri = param_->bag_path;
@@ -151,16 +152,21 @@ namespace fgo::dataset {
         auto bag_message = reader->read_next();
         auto message_topic_name = bag_message->topic_name;
         raw_message_map_[bag_message->topic_name].emplace_back(
-            std::make_pair(bag_message->time_stamp, bag_message->serialized_data));
+          std::make_pair(bag_message->time_stamp, bag_message->serialized_data));
 
       }
 
+      reader->close();
+
     }
 
-    std::vector<std::pair<int64_t, std::shared_ptr<rcutils_uint8_array_t>>>
-    readPartialDataFromBag(const std::string &topic,
-                           const rclcpp::Time &start_time,
-                           double max_size) {
+    std::map<std::string, std::vector<std::pair<int64_t, std::shared_ptr<rcutils_uint8_array_t>>>>
+    readPartialDataFromBag(const std::vector<std::string> &topics,
+                           const int64_t &start_time_nanosec,
+                           double max_size,
+                           bool &has_next) {
+
+      std::map<std::string, std::vector<std::pair<int64_t, std::shared_ptr<rcutils_uint8_array_t>>>> data_map;
       double memory_usage = 0.;
       std::vector<std::pair<int64_t, std::shared_ptr<rcutils_uint8_array_t>>> raw_data;
       rosbag2_cpp::readers::SequentialReader reader;
@@ -171,31 +177,64 @@ namespace fgo::dataset {
       converter_options.input_serialization_format = "cdr";
       converter_options.output_serialization_format = "cdr";
 
-      const auto bag_meta = reader.get_metadata();
-
-      auto filter_ = rosbag2_storage::StorageFilter();
-      filter_.topics.emplace_back(topic);
-      reader.set_filter(filter_);
       reader.open(storage_options, converter_options);
 
+      auto filter_ = rosbag2_storage::StorageFilter();
+      filter_.topics = topics;
+      reader.set_filter(filter_);
+
       while (reader.has_next()) {
-        std::lock_guard<std::mutex> lg(mutex_);
-        auto bag_message = reader.read_next();
-        if (bag_message->time_stamp < start_time.nanoseconds())
+        const auto bag_message = reader.read_next();
+        if (bag_message->time_stamp < start_time_nanosec)
           continue;
         memory_usage += bag_message->serialized_data->buffer_length * 1e-9;
-        raw_data.emplace_back(std::make_pair(bag_message->time_stamp, bag_message->serialized_data));
+        data_map[bag_message->topic_name].emplace_back(std::make_pair(bag_message->time_stamp, bag_message->serialized_data));
         if (memory_usage > max_size)
           break;
       }
+      has_next = reader.has_next();
 
+      reader.close();
+      return data_map;
+    };
+
+    std::vector<std::pair<int64_t, std::shared_ptr<rcutils_uint8_array_t>>>
+    readSinglePartialDataFromBag(const std::string &topic,
+                                 const int64_t &start_time_nanosec,
+                                 double max_size,
+                                 bool  &has_next) {
+      double memory_usage = 0.;
+      std::vector<std::pair<int64_t, std::shared_ptr<rcutils_uint8_array_t>>> raw_data;
+      const auto reader = std::make_unique<rosbag2_cpp::readers::SequentialReader>();
+      rosbag2_storage::StorageOptions storage_options{};
+      storage_options.uri = param_->bag_path;
+      storage_options.storage_id = "sqlite3";
+      rosbag2_cpp::ConverterOptions converter_options{};
+      converter_options.input_serialization_format = "cdr";
+      converter_options.output_serialization_format = "cdr";
+
+      reader->open(storage_options, converter_options);
+      auto filter_ = rosbag2_storage::StorageFilter();
+      filter_.topics.emplace_back(topic);
+      reader->set_filter(filter_);
+
+      while (reader->has_next()) {
+        auto bag_message = reader->read_next();
+        if (bag_message->time_stamp < start_time_nanosec)
+          continue;
+
+        memory_usage += bag_message->serialized_data->buffer_length * 1e-9;
+        raw_data.emplace_back(std::make_pair(bag_message->time_stamp, bag_message->serialized_data));
+        if (memory_usage > max_size) {
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), topic << " read raw buffer with the size of " << memory_usage << " GB. ");
+          break;
+        }
+      }
+      has_next = reader->has_next();
+      reader->close();
       return raw_data;
     }
-
-
   };
-
-
 }
 
 #endif //ONLINE_FGO_BAGREADER_H

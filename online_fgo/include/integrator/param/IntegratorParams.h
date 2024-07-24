@@ -26,150 +26,140 @@
 #include <gtsam/geometry/Point3.h>
 #include "graph/param/GraphParams.h"
 
-namespace fgo::integrator::param {
-  struct IntegratorBaseParams : fgo::graph::GraphParamBase {
-    bool notIntegrating = false;
-    double StateSensorSyncTimeThreshold = 0.03;  // if the time difference of GNSS and State i is less than this seconds, they are synchronized
-    bool useHeaderTimestamp = true;
-    bool useForInitialization = false;
-    fgo::factor::MeasurementFrame attitudeFrame = fgo::factor::MeasurementFrame::NED;
-    fgo::factor::AttitudeType attitudeType = fgo::factor::AttitudeType::RPY;
-    data::NoiseModel noiseModelAttitude = data::NoiseModel::GAUSSIAN;
-    double robustParamAttitude = 0.5;
-    fgo::factor::MeasurementFrame velocityFrame = fgo::factor::MeasurementFrame::BODY;
-    fgo::factor::VelocityType velocityType = fgo::factor::VelocityType::VEL3D;
-    data::NoiseModel noiseModelVelocity = data::NoiseModel::GAUSSIAN;
-    double robustParamVelocity = 0.5;
+namespace fgo::integrator::param
+{
+    struct IntegratorBaseParams : fgo::graph::GraphParamBase
+    {
+        bool notIntegrating = false;
+        double StateSensorSyncTimeThreshold = 0.03;  // if the time difference of GNSS and State i is less than this seconds, they are synchronized
+        bool useHeaderTimestamp = true;
+        bool useForInitialization = false;
+        fgo::factor::MeasurementFrame attitudeFrame = fgo::factor::MeasurementFrame::NED;
+        fgo::factor::AttitudeType attitudeType = fgo::factor::AttitudeType::RPY;
+        data::NoiseModel noiseModelAttitude = data::NoiseModel::GAUSSIAN;
+        double robustParamAttitude = 0.5;
+        fgo::factor::MeasurementFrame velocityFrame = fgo::factor::MeasurementFrame::BODY;
+        fgo::factor::VelocityType velocityType = fgo::factor::VelocityType::VEL3D;
+        data::NoiseModel noiseModelVelocity = data::NoiseModel::GAUSSIAN;
+        double robustParamVelocity = 0.5;
 
-    data::NoiseModel noiseModelOdomPose = data::NoiseModel::GAUSSIAN;
-    double robustParamOdomPose = 0.5;
-    gtsam::Vector6 odomPoseVar = (gtsam::Vector6() << 0.5, 0.5, 0.5, 2, 2, 2).finished();
+        data::NoiseModel noiseModelOdomPose = data::NoiseModel::GAUSSIAN;
+        double robustParamOdomPose = 0.5;
+        gtsam::Vector6 odomPoseVar = (gtsam::Vector6() << 0.5, 0.5, 0.5, 2, 2, 2).finished();
 
-    bool integrateVelocity = true;   // not read in integratorBase
-    bool integrateAttitude = true;   // not read in integratorBase
-    bool integrateRollPitch = false; // not read in integratorBase
+        bool integrateVelocity = true;   // not read in integratorBase
+        bool integrateAttitude = true;   // not read in integratorBase
+        bool integrateRollPitch = false; // not read in integratorBase
 
-    bool hasRoll = false;            // not read in integratorBase
-    bool hasPitch = false;          // not read in integratorBase
-    bool hasHeading = false;
-    double heading_offset_deg = 0.;
-    // uncertainty variables
-    double velVarScale = 1.;        // not read in integratorBase
-    double headingVarScale = 1.;    // not read in integratorBase
-    double varScaleHeadingRTKFloat = 1.;
-    double varScaleHeadingSingle = 1.;
-    double fixedVelVar = 1.;        // not read in integratorBase
-    gtsam::Vector3 velVar = gtsam::Vector3(0.1, 0.1, 0.1);
+        bool hasRoll = false;            // not read in integratorBase
+        bool hasPitch = false;          // not read in integratorBase
+        bool hasHeading = false;
+        double heading_offset_deg = 0.;
+        // uncertainty variables
+        double velVarScale = 1.;        // not read in integratorBase
+        double headingVarScale = 1.;    // not read in integratorBase
+        double varScaleHeadingRTKFloat = 1.;
+        double varScaleHeadingSingle = 1.;
+        double fixedVelVar = 1.;        // not read in integratorBase
+        gtsam::Vector3 velVar = gtsam::Vector3(0.1,0.1,0.1);
 
-    double zeroVelocityThreshold = 0.05;
+        double zeroVelocityThreshold = 0.05;
 
-    IntegratorBaseParams() = default;
+        IntegratorBaseParams() = default;
 
-    explicit IntegratorBaseParams(const fgo::graph::GraphParamBasePtr &baseParamPtr) : fgo::graph::GraphParamBase(
-      *baseParamPtr) {};
-  };
+        explicit IntegratorBaseParams(const fgo::graph::GraphParamBasePtr& baseParamPtr) : fgo::graph::GraphParamBase(*baseParamPtr) {};
+    };
+    typedef std::shared_ptr<IntegratorBaseParams> IntegratorBaseParamsPtr;
 
-  typedef std::shared_ptr<IntegratorBaseParams> IntegratorBaseParamsPtr;
+    struct IntegratorGNSSTCParams : IntegratorBaseParams
+    {
+        uint GNSSMeasurementFrequency = 10;  // 10 Hz
+        const double lambdaL1 = fgo::constants::speedOfLight / fgo::constants::L1;
 
-  struct IntegratorGNSSTCParams : IntegratorBaseParams {
-    uint GNSSMeasurementFrequency = 10;  // 10 Hz
-    const double lambdaL1 = fgo::constants::speedOfLight / fgo::constants::L1;
+        bool addCBDPriorFactorOnNoGNSS = true;
+        bool usePseudoRangeDoppler = false;
+        bool usePseudoRange = false;
+        bool useDopplerRange = false;
+        bool useDDCarrierPhase = false;
+        bool useDDPseudoRange = false;
+        bool useTDCarrierPhase = false;
+        bool useDualAntenna = false;
+        bool useDualAntennaDD = false;
+        bool useRTCMDD = false;
+        bool pseudorangeUseRawStd = false;
+        int pseudorangeFactorTil = 10;
+        double carrierStdScale = 1.;
+        int thresholdSatNumToCreateTDCP = 2;
+        double pseudorangeVarScaleAntMain = 2400;
+        double dopplerrangeVarScaleAntMain = 8;
+        double pseudorangeVarScaleAntAux= 3600;
+        double dopplerrangeVarScaleAntAux = 16;
+        double carrierphaseStd = 0.01;
+        double initCovforIntAmb = 100000.0;
+        std::string weightingModel = "STD";
+        double ddCPStart = 10; //seconds to wait until DDCP factor start
 
-    bool addCBDPriorFactorOnNoGNSS = true;
-    bool usePseudoRangeDoppler = false;
-    bool usePseudoRange = false;
-    bool useDopplerRange = false;
-    bool useDDCarrierPhase = false;
-    bool useDDPseudoRange = false;
-    bool useTDCarrierPhase = false;
-    bool useDualAntenna = false;
-    bool useDualAntennaDD = false;
-    bool useRTCMDD = false;
-    bool pseudorangeUseRawStd = false;
-    int pseudorangeFactorTil = 10;
-    double carrierStdScale = 1.;
-    int thresholdSatNumToCreateTDCP = 2;
-    double pseudorangeVarScaleAntMain = 2400;
-    double dopplerrangeVarScaleAntMain = 8;
-    double pseudorangeVarScaleAntAux = 3600;
-    double dopplerrangeVarScaleAntAux = 16;
-    double carrierphaseStd = 0.01;
-    double initCovforIntAmb = 100000.0;
-    std::string weightingModel = "STD";
-    double ddCPStart = 10; //seconds to wait until DDCP factor start
+        data::NoiseModel noiseModelPRDR = data::NoiseModel::GAUSSIAN;
+        data::NoiseModel noiseModelDDCP = data::NoiseModel::GAUSSIAN;
+        data::NoiseModel noiseModelTDCP = data::NoiseModel::GAUSSIAN;
 
-    data::NoiseModel noiseModelPRDR = data::NoiseModel::GAUSSIAN;
-    data::NoiseModel noiseModelDDCP = data::NoiseModel::GAUSSIAN;
-    data::NoiseModel noiseModelTDCP = data::NoiseModel::GAUSSIAN;
+        double robustParameterPRDR = 0.5;
+        double robustParameterDDCP = 0.5;
+        double robustParameterTDCP = 0.5;
 
-    double robustParameterPRDR = 0.5;
-    double robustParameterDDCP = 0.5;
-    double robustParameterTDCP = 0.5;
+        IntegratorGNSSTCParams() = default;
+        explicit IntegratorGNSSTCParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(*baseParamPtr){}
+    };
+    typedef std::shared_ptr<IntegratorGNSSTCParams> IntegratorGNSSTCParamsPtr;
 
-    IntegratorGNSSTCParams() = default;
+    struct IntegratorGNSSLCParams : IntegratorBaseParams
+    {
+        uint GNSSMeasurementFrequency = 10;  // 10 Hz
+        double posVarScale = 1.;
 
-    explicit IntegratorGNSSTCParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(
-      *baseParamPtr) {}
-  };
+        double varScaleRTKFloat = 1.;
+        double varScaleSingle = 1.;
+        double varScaleNoSolution = 1000.;
 
-  typedef std::shared_ptr<IntegratorGNSSTCParams> IntegratorGNSSTCParamsPtr;
+        //std::string PVTSource = "oem7";
+        data::NoiseModel noiseModelPosition = data::NoiseModel::GAUSSIAN;
 
-  struct IntegratorGNSSLCParams : IntegratorBaseParams {
-    uint GNSSMeasurementFrequency = 10;  // 10 Hz
-    double posVarScale = 1.;
-
-    double varScaleRTKFloat = 1.;
-    double varScaleSingle = 1.;
-    double varScaleNoSolution = 1000.;
-
-    //std::string PVTSource = "oem7";
-    data::NoiseModel noiseModelPosition = data::NoiseModel::GAUSSIAN;
-
-    bool onlyRTKFixed = true;
-    double robustParamPosition = 0.5;
+        bool onlyRTKFixed = true;
+        double robustParamPosition = 0.5;
 
 
-    IntegratorGNSSLCParams() = default;
+        IntegratorGNSSLCParams() = default;
+        explicit IntegratorGNSSLCParams(const IntegratorBaseParamsPtr &baseParamPtr)  : IntegratorBaseParams(*baseParamPtr){}
 
-    explicit IntegratorGNSSLCParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(
-      *baseParamPtr) {}
+    };
+    typedef std::shared_ptr<IntegratorGNSSLCParams> IntegratorGNSSLCParamsPtr;
 
-  };
+    struct IntegratorOdomParams : IntegratorBaseParams
+    {
+        bool integrateBetweenPose = true;
+        bool integrateGlobalPose = false;
 
-  typedef std::shared_ptr<IntegratorGNSSLCParams> IntegratorGNSSLCParamsPtr;
+        IntegratorOdomParams() = default;
+        explicit IntegratorOdomParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(*baseParamPtr){}
+    };
+    typedef std::shared_ptr<IntegratorOdomParams> IntegratorOdomParamsPtr;
 
-  struct IntegratorOdomParams : IntegratorBaseParams {
-    bool integrateBetweenPose = true;
-    bool integrateGlobalPose = false;
+    struct IntegratorCorrevitParams : IntegratorBaseParams {
+        //IntegratorCorrevitParams() = default;
 
-    IntegratorOdomParams() = default;
+        double nearZeroVelocityThreshold = 0.;
+        double factorizeDelay = 5.;
+        bool enablePreIntegration = false;
 
-    explicit IntegratorOdomParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(*baseParamPtr) {}
-  };
+        explicit IntegratorCorrevitParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(*baseParamPtr){}
+    };
+    typedef std::shared_ptr<IntegratorCorrevitParams> IntegratorCorrevitParamsPtr;
 
-  typedef std::shared_ptr<IntegratorOdomParams> IntegratorOdomParamsPtr;
-
-  struct IntegratorCorrevitParams : IntegratorBaseParams {
-    //IntegratorCorrevitParams() = default;
-
-    double nearZeroVelocityThreshold = 0.;
-    double factorizeDelay = 5.;
-    bool enablePreIntegration = false;
-
-    explicit IntegratorCorrevitParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(
-      *baseParamPtr) {}
-  };
-
-  typedef std::shared_ptr<IntegratorCorrevitParams> IntegratorCorrevitParamsPtr;
-
-  struct IntegratorIRTPVAParams : IntegratorBaseParams {
-    IntegratorIRTPVAParams() = default;
-
-    explicit IntegratorIRTPVAParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(
-      *baseParamPtr) {}
-  };
-
-  typedef std::shared_ptr<IntegratorIRTPVAParams> IntegratorIRTPVAParamsPtr;
+    struct IntegratorIRTPVAParams : IntegratorBaseParams {
+        IntegratorIRTPVAParams() = default;
+        explicit IntegratorIRTPVAParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(*baseParamPtr){}
+    };
+    typedef std::shared_ptr<IntegratorIRTPVAParams> IntegratorIRTPVAParamsPtr;
 }
 
 #endif //ONLINE_FGO_INTEGRATORPARAMS_H

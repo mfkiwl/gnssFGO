@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-#  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+#  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 #          Jiandong Chen (jiandong.chen@rwth-aachen.de)
 
 # **************************************************************************** #
@@ -42,20 +42,14 @@ endmacro()
 
 # **************************************************************************** #
 # ************************** boreas_node ************************************* #
-# set(boreas_node_src_file
-#     nodeOnlineFGOBoreas.cpp 
-#     nodeOfflineFGOTimeCentric.cpp
-# )
-# onlinefgo_node_helper(boreas_node ${boreas_node_src_file})
 
-# ************************** learning_gp_node ******************************** #
-onlinefgo_node_helper(learning_gp_node nodeOfflineLearningGP.cpp)
+onlinefgo_node_helper(boreas_node nodeOnlineFGOBoreas.cpp)
 
 # ************************** online_fgo_node ********************************* #
 onlinefgo_node_helper(online_fgo_node nodeOnlineFGOTimeCentric.cpp)
 
-# ************************** urbanloco_node ********************************** #
-onlinefgo_node_helper(urbanloco_node nodeOnlineFGOTimeCentricUrbanLoco.cpp)
+# ************************** learning_gp_node ******************************** #
+onlinefgo_node_helper(learning_gp_node nodeOfflineLearningGP.cpp)
 
 # ************************** gt_node ***************************************** #
-onlinefgo_node_helper(gt_node nodeOnlineFGOGT.cpp)
+onlinefgo_node_helper(offline_vo_node nodeOfflineVisualFGO.cpp)

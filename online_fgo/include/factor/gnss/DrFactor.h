@@ -29,7 +29,7 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
 #include "utils/NavigationTools.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
 * Keys: pose of time i X(i), velocity of time i V(i), clock bias drift of time i C(i)

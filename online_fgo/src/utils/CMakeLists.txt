@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-#  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+#  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 #          Jiandong Chen (jiandong.chen@rwth-aachen.de)
 
 set(ONLINEFGO_UTIL_NAME
@@ -21,7 +21,7 @@ set(ONLINEFGO_UTIL_NAME
 add_library(${ONLINEFGO_UTIL_NAME} 
     SHARED
     GPUtils.cpp
-    Pose3utils.cpp
+        Pose3Utils.cpp
 )
 target_include_directories(${ONLINEFGO_UTIL_NAME}
     PUBLIC

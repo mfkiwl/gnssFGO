@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-#  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+#  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 #          Jiandong Chen (jiandong.chen@rwth-aachen.de)
 
 
@@ -34,23 +34,15 @@ target_link_libraries(${ONLINEFGO_SENSOR_NAME}
 add_definitions(${PCL_DEFINITIONS})
 ament_target_dependencies(${ONLINEFGO_SENSOR_NAME}
     PUBLIC
-    "rmw"
     "lio_sam"
-    "rclcpp"
-    "OpenCV"
-    "irt_nav_msgs"
-    "PCL"
-    "visualization_msgs"
-    "nav_msgs"
-    "sensor_msgs"
-    "std_msgs"
-    "pluginlib"
+
     "tf2"
     "tf2_ros"
     "tf2_eigen"
     "tf2_sensor_msgs"
     "tf2_geometry_msgs"
-    "pcl_msgs"
+    "visualization_msgs"
+        ${ONLINEFGO_ROS_DEP}
 )
 set(ONLINEFGO_BUILD_TARGET
     ${ONLINEFGO_BUILD_TARGET}

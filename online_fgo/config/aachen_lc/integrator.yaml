@@ -3,20 +3,23 @@
   ros__parameters:
     GNSSFGO:
       IntegratorBase:
-        StateSensorSyncTimeThreshold: 0.01
-        IMUSensorSyncTimeThreshold: 0.01
+        StateSensorSyncTimeThreshold: 0.01    # TO BE DELETED
+        IMUSensorSyncTimeThreshold: 0.01      # Timestamp threshold used to align imu data with sensor measurement. E.g., used in initialization to drop imu data before the timestamp of prior state
 
       IRTPVALCIntegrator:
-        integratorPlugin: "GNSSLCIntegrator"
-        notIntegrating: false
-        useForInitialization: true
-        useHeaderTimestamp: true
-        GNSSMeasurementFrequency: 10
-        PVTSource: "irt"
+        integratorPlugin: "GNSSLCIntegrator"  # [Mandatory] plugin type, must be set to load the plugin
+        sensorName: "reference"               # [Mandatory] sensor name, must be set to query sensor calibration parameters and must be matched with the name under VehicleParameters
+        isPrimarySensor: false                # [Optional]  used for sensor-centric fusion, a primary sensor controls the graph optimization
+        notIntegrating: false                 # [Mandatory] if FALSE, the sensor observations will be added to the graph
+        useForInitialization: true            # [Mandatory] if TRUE, the sensor observation will be used to set a prior state
+        useHeaderTimestamp: true              # [Mandatory] if TRUE, observation's timestamp is set from the header.
+                                              #             if FALSE, ros time will be used (some messages do not have a header)
+        GNSSMeasurementFrequency: 10          # [Optional]  currently not used
+        PVTSource: "irt"                      # [Mandatory]
         hasHeading: true
         hasPitch: false
         hasRoll: false
-        integrateAttitude: true
+        integrateAttitude: false
         integrateVelocity: false
         onlyRTKFixed: false
 
@@ -49,7 +52,8 @@
 
       UbloxLCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
-        notIntegrating: true
+        sensorName: "ublox_ant_main"
+        notIntegrating: false
         useForInitialization: false
         useHeaderTimestamp: true
         transIMUToGNSSAnt1: [ 0., 0., -0.04 ] # [0.0, 0.0, 0.0]
@@ -94,6 +98,7 @@
       LIOIntegrator:
         notIntegrating: false
         integratorPlugin: "LIOIntegrator"
+        sensorName: "vlp16"
         pointCloudTopic: "/velodyne_points"
         lidarFrame: "velodyne"
         baselinkFrame: "base_link"

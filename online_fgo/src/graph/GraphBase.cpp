@@ -16,12 +16,13 @@
 //
 //
 
-#include <algorithm>
 #include "graph/GraphBase.h"
 #include "integrator/IntegratorBase.h"
 #include "gnss_fgo/GNSSFGOLocalizationBase.h"
-#include "data/sampling/UncentedSampler.h"
-#include "utils/AlgorithmicUtils.h"
+
+#include "factor/odometry/NavAttitudeFactor.h"
+#include "factor/odometry/GPInterpolatedNavAttitudeFactor.h"
+
 
 namespace fgo::graph {
   using namespace std::chrono_literals;
@@ -31,10 +32,11 @@ namespace fgo::graph {
     integratorLoader_("online_fgo", "fgo::integrator::IntegratorBase") {
     RCLCPP_INFO(appPtr_->get_logger(), "---------------------  GraphBase initializing! --------------------- ");
     graphBaseParamPtr_ = std::make_shared<GraphParamBase>(node.getParamPtr());
+    sensorCalibManager_ = node.sensorCalibManager_;
     referenceSensorTimestampBuffer_.resize_buffer(50);
     referenceStateBuffer_.resize_buffer(50);
     fgoOptStateBuffer_.resize_buffer(50);
-    accBuffer_.resize_buffer(20000);
+    accBuffer_.resize_buffer(10000);
     currentPredictedBuffer_.resize_buffer(50);
 
     RosParameter<bool> publishResiduals("GNSSFGO.Graph.publishResiduals", true, node);
@@ -49,10 +51,13 @@ namespace fgo::graph {
       RosParameter<bool> onlyLastResiduals("GNSSFGO.Graph.onlyLastResiduals", true, node);
       graphBaseParamPtr_->onlyLastResiduals = onlyLastResiduals.value();
       RCLCPP_INFO_STREAM(appPtr_->get_logger(), "onlyLastResiduals:" << graphBaseParamPtr_->onlyLastResiduals);
+
       factorBuffer_.resize_buffer(100);
+      resultMarginalBuffer_.resize_buffer(100);
       pubResiduals_ = appPtr_->create_publisher<irt_nav_msgs::msg::FactorResiduals>("residuals",
                                                                                     rclcpp::SystemDefaultsQoS());
-
+      pubGTResiduals_ = appPtr_->create_publisher<irt_nav_msgs::msg::FactorResiduals>("GTResiduals",
+                                                                                    rclcpp::SystemDefaultsQoS());
       std::vector<std::string> factorSkipped = {};
       RosParameter<std::vector<std::string>> factorSkippedParam("GNSSFGO.Graph.factorSkipped", factorSkipped, node);
 
@@ -162,9 +167,13 @@ namespace fgo::graph {
       }
     }
 
-    const auto testDt = 1. / graphBaseParamPtr_->stateFrequency;
+    RosParameter<double> testDt("GNSSFGO.Optimizer.testDt", 0.1, node);
 
     if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::WNOJ) {
+      //RosParameter<double> QcGPMotionPrior("GNSSFGO.Optimizer.QcGPWNOJMotionPrior", 1000., node);
+      //graphBaseParamPtr_->QcGPMotionPrior = QcGPMotionPrior.value();
+      //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPWNOJMotionPrior:" << graphBaseParamPtr_->QcGPMotionPrior);
+
       RosParameter<std::vector<double>> QcGPMotionPriorFull("GNSSFGO.Optimizer.QcGPWNOJMotionPriorFull", node);
       graphBaseParamPtr_->QcGPMotionPriorFull = gtsam::Vector6(QcGPMotionPriorFull.value().data());
       RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPWNOJMotionPrior:" << graphBaseParamPtr_->QcGPMotionPriorFull);
@@ -174,11 +183,17 @@ namespace fgo::graph {
       RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPWNOJInterpolator:" << graphBaseParamPtr_->QcGPInterpolatorFull);
       gtsam::SharedNoiseModel qcModel = gtsam::noiseModel::Diagonal::Variances(graphBaseParamPtr_->QcGPMotionPriorFull);
       const auto qc = gtsam::noiseModel::Gaussian::Covariance(
-        fgo::utils::calcQ3<6>(fgo::utils::getQc(qcModel), testDt));
+        fgo::utils::calcQ3<6>(fgo::utils::getQc(qcModel), testDt.value()));
+
+      std::cout << "#################################################################" << std::endl;
+
       std::cout << fgo::utils::getQc(qcModel) << std::endl;
       std::cout << "###" << std::endl;
       qc->print("Q3:");
-    } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
+
+      std::cout << "#################################################################" << std::endl;
+
+    } else {
       RosParameter<std::vector<double>> QcGPMotionPriorFull("GNSSFGO.Optimizer.QcGPWNOAMotionPriorFull", node);
       graphBaseParamPtr_->QcGPMotionPriorFull = gtsam::Vector6(QcGPMotionPriorFull.value().data());
       RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPWNOAMotionPrior:" << graphBaseParamPtr_->QcGPMotionPriorFull);
@@ -187,32 +202,19 @@ namespace fgo::graph {
       graphBaseParamPtr_->QcGPInterpolatorFull = gtsam::Vector6(QcFull.value().data());
       RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPWNOAInterpolator:" << graphBaseParamPtr_->QcGPInterpolatorFull);
       gtsam::SharedNoiseModel qcModel = gtsam::noiseModel::Diagonal::Variances(graphBaseParamPtr_->QcGPMotionPriorFull);
-      auto qc = gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ<6>(fgo::utils::getQc(qcModel), testDt));
+      auto qc = gtsam::noiseModel::Gaussian::Covariance(
+        fgo::utils::calcQ<6>(fgo::utils::getQc(qcModel), testDt.value()));
+
+      std::cout << "#################################################################" << std::endl;
 
       std::cout << fgo::utils::getQc(qcModel) << std::endl;
       std::cout << "###" << std::endl;
       qc->print("Q:");
 
-    } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::Singer) {
 
-      // ToDo @ Zirui, please try to read the Ad matrix for configuration and make a screening here
-      RosParameter<std::vector<double>> QcGPMotionPriorFull("GNSSFGO.Optimizer.QcGPSingerMotionPriorFull", node);
-      graphBaseParamPtr_->QcGPMotionPriorFull = gtsam::Vector6(QcGPMotionPriorFull.value().data());
-      RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPSingerMotionPrior:" << graphBaseParamPtr_->QcGPMotionPriorFull);
-
-      RosParameter<std::vector<double>> QcFull("GNSSFGO.Optimizer.QcGPSingerInterpolatorFull", node);
-      graphBaseParamPtr_->QcGPInterpolatorFull = gtsam::Vector6(QcFull.value().data());
-      RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPSingerInterpolator:" << graphBaseParamPtr_->QcGPInterpolatorFull);
-      gtsam::SharedNoiseModel qcModel = gtsam::noiseModel::Diagonal::Variances(graphBaseParamPtr_->QcGPMotionPriorFull);
-      auto qc = gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ<6>(fgo::utils::getQc(qcModel), testDt));
-
-      std::cout << fgo::utils::getQc(qcModel) << std::endl;
-      std::cout << "###" << std::endl;
-      qc->print("Q:");
-
+      std::cout << "#################################################################" << std::endl;
     }
 
-    // PARAM: Using automatic differencing or analytical Jacobians
     RosParameter<bool> AutoDiffNormalFactor("GNSSFGO.Graph.AutoDiffNormalFactor", node);
     graphBaseParamPtr_->AutoDiffNormalFactor = AutoDiffNormalFactor.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(),
@@ -233,38 +235,33 @@ namespace fgo::graph {
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "GPInterpolatedFactorCalcJacobian: "
       << (graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian ? "true" : "false"));
 
-    // PARAM: result handling
-    RosParameter<bool> useEstimatedVarianceAfterInit("GNSSFGO.Graph.useEstimatedVarianceAfterInit", node);
-    graphBaseParamPtr_->useEstimatedVarianceAfterInit = useEstimatedVarianceAfterInit.value();
-    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "useEstimatedVarianceAfterInit: "
-      << (graphBaseParamPtr_->useEstimatedVarianceAfterInit ? "true" : "false"));
+    RosParameter<bool> useEstimatedVarianceAfterInit("GNSSFGO.Graph.addEstimatedVarianceAfterInit", node);
+    graphBaseParamPtr_->addEstimatedVarianceAfterInit = useEstimatedVarianceAfterInit.value();
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "addEstimatedVarianceAfterInit: "
+      << (graphBaseParamPtr_->addEstimatedVarianceAfterInit ? "true" : "false"));
 
-    // ToDo: @Haoming, move this to TC GNSS Integrator
     RosParameter<bool> addConstDriftFactor("GNSSFGO.Graph.addConstDriftFactor", node);
     graphBaseParamPtr_->addConstDriftFactor = addConstDriftFactor.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(),
                        "addConstDriftFactor: " << (graphBaseParamPtr_->addConstDriftFactor ? "true" : "false"));
+
     RosParameter<std::string> noiseModelClockFactor("GNSSFGO.Graph.noiseModelClockFactor", node);
     integrator::IntegratorBase::setNoiseModelFromParam(noiseModelClockFactor.value(),
                                                        graphBaseParamPtr_->noiseModelClockFactor,
                                                        "ClockFactor");
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "clockDriftNoiseModel: " << noiseModelClockFactor.value());
+
     RosParameter<double> robustParamClockFactor("GNSSFGO.Graph.robustParamClockFactor", node);
     graphBaseParamPtr_->robustParamClockFactor = robustParamClockFactor.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "robustParamClockFactor: " << graphBaseParamPtr_->robustParamClockFactor);
-    RosParameter<double> constDriftStd("GNSSFGO.Graph.constDriftStd", 1, node);
-    graphBaseParamPtr_->constDriftStd = constDriftStd.value();
-    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "constDriftStd: " << graphBaseParamPtr_->constDriftStd);
-
-    // PARAM: Factors
-    RosParameter<bool> addConstantAccelerationFactor("GNSSFGO.Graph.addConstantAccelerationFactor", false, node);
-    graphBaseParamPtr_->addConstantAccelerationFactor = addConstantAccelerationFactor.value();
-    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "addConstantAccelerationFactor: "
-      << (graphBaseParamPtr_->addConstantAccelerationFactor ? "true" : "false"));
 
     RosParameter<double> angularRateStd("GNSSFGO.Graph.angularRateStd", 1, node);
     graphBaseParamPtr_->angularRateStd = angularRateStd.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "angularRateStd: " << graphBaseParamPtr_->angularRateStd);
+
+    RosParameter<double> constDriftStd("GNSSFGO.Graph.constDriftStd", 1, node);
+    graphBaseParamPtr_->constDriftStd = constDriftStd.value();
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "constDriftStd: " << graphBaseParamPtr_->constDriftStd);
 
     RosParameter<double> constBiasStd("GNSSFGO.Graph.constBiasStd", 1, node);
     graphBaseParamPtr_->constBiasStd = constBiasStd.value();
@@ -281,7 +278,6 @@ namespace fgo::graph {
     graphBaseParamPtr_->StateMeasSyncUpperBound = StateMeasSyncUpperBound.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(),
                        "StateMeasSyncUpperBound: " << graphBaseParamPtr_->StateMeasSyncUpperBound);
-
     RosParameter<double> StateMeasSyncLowerBound("GNSSFGO.Graph.StateMeasSyncLowerBound", -0.02, node);
     graphBaseParamPtr_->StateMeasSyncLowerBound = StateMeasSyncLowerBound.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(),
@@ -297,7 +293,6 @@ namespace fgo::graph {
     RosParameter<int> NoOptimizationAfterStates("GNSSFGO.Graph.NoOptimizationAfterStates", node);
     graphBaseParamPtr_->NoOptimizationAfterStates = NoOptimizationAfterStates.value();
 
-    // PARAM: Initializing integrators
     RosParameter<std::vector<std::string>> integratorNames("GNSSFGO.Integrators", node);
 
     bool primarySensorSet = false;
@@ -308,10 +303,8 @@ namespace fgo::graph {
         RCLCPP_INFO_STREAM(appPtr_->get_logger(),
                            "GraphTimeCentric: initializing integrator: " << integratorName << " with plugin: "
                                                                          << plugin);
-        auto integrator = integratorLoader_.createSharedInstance(plugin);
-        integrator->initialize(node, *this, integratorName);
-        integratorMap_.insert(std::make_pair(integratorName, integrator));
         RosParameter<bool> isPrimarySensor("GNSSFGO." + integratorName + ".isPrimarySensor", false, node);
+        auto integrator = integratorLoader_.createSharedInstance(plugin);
         if (isPrimarySensor.value()) {
           if (primarySensorSet)
             RCLCPP_WARN_STREAM(appPtr_->get_logger(),
@@ -322,241 +315,249 @@ namespace fgo::graph {
           primarySensorSet = true;
 
         }
+
+        integrator->initialize(node, *this, integratorName, isPrimarySensor.value());
+        integratorMap_.insert(std::make_pair(integratorName, integrator));
+        RCLCPP_INFO_STREAM(appPtr_->get_logger(),
+                           "GraphTimeCentric: integrator: " << integratorName << " with plugin: " << plugin
+                                                            << " initialized!");
       } else {
         RCLCPP_WARN_STREAM(appPtr_->get_logger(),
                            "GraphTimeCentric: cannot find integrator: " << integratorName << " with plugin: "
                                                                         << plugin);
       }
-    }
 
-    RCLCPP_INFO(appPtr_->get_logger(), "---------------------  GraphBase initialized! --------------------- ");
-  };
+      RCLCPP_INFO(appPtr_->get_logger(), "---------------------  GraphBase initialized! --------------------- ");
+    };
+  }
+
+  void GraphBase::calculateGroundTruthResiduals(const rclcpp::Time &timestamp, const gtsam::Values &gt) {
+
+  }
 
   void GraphBase::calculateResiduals(const rclcpp::Time &timestamp, const gtsam::Values &result,
                                      const gtsam::Marginals &marginals) {
     uint64_t maxStateIndex = 0;
-    std::for_each(result.keys().begin(), result.keys().end(), [&](const gtsam::Key &key) -> void {
+
+    for (const auto &key: result.keys()) {
       const auto keyIndex = gtsam::symbolIndex(key);
       if (keyIndex > maxStateIndex)
         maxStateIndex = keyIndex;
-    });
+    }
+
     const auto factorBuffer = factorBuffer_.get_all_time_buffer_pair();
+
     for (const auto &factorVectorTimePair: factorBuffer) {
       if (factorVectorTimePair.first > timestamp)
         continue;
       irt_nav_msgs::msg::FactorResiduals resMsg;
       resMsg.header.stamp = timestamp;
       const auto &factorVec = factorVectorTimePair.second;
-      std::for_each(factorVec.begin(), factorVec.end(), [&](const gtsam::NonlinearFactor::shared_ptr &factor) -> void {
-        bool sampleResiduals = false;
-        bool factorImplemented = true;
-        gtsam::NoiseModelFactor::shared_ptr thisFactorCasted;
-        const auto factorTypeID = factor->getTypeID();
-        if (std::find(this->graphBaseParamPtr_->skippedFactorsForResiduals.begin(),
-                      this->graphBaseParamPtr_->skippedFactorsForResiduals.end(), factorTypeID) !=
-            this->graphBaseParamPtr_->skippedFactorsForResiduals.end()) {
-          return;
-        }
-        switch (factorTypeID) {
-          case fgo::factor::FactorTypeID::GPWNOAMotionPrior: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPWNOAPriorPose3>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPWNOJMotionPrior: {
-            sampleResiduals = true;
-            if (graphBaseParamPtr_->fullGPPrior)
-              thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPWNOJPriorPose3Full>(factor);
-            else
-              thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPWNOJPriorPose3>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPSingerMotionPrior: {
-            sampleResiduals = true;
-            if (graphBaseParamPtr_->fullGPPrior)
-              thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPSingerPriorPose3Full>(factor);
-            else
-              thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPSingerPriorPose3>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::CombinedIMU: {
-            thisFactorCasted = boost::dynamic_pointer_cast<gtsam::CombinedImuFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::BetweenPose: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::BetweenPose3Factor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPDoubleBetweenPose: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedDoublePose3BetweenFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPSingleBetweenPose: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedSinglePose3BetweenFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::ReceiverClock: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::ConstDriftFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::PRDR: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::PrDrFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPPRDR: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedPrDrFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::PR: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::PrFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPPR: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedPrFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPS: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPSFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPGPS: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedGPSFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::PVT: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::PVTFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPPVT: {
-            sampleResiduals = true;
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedPVTFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::NavAttitude: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::NavAttitudeFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPNavAttitude: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedNavAttitudeFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::NavVelocity: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::NavVelocityFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPNavVelocity: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedNavVelocityFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::NavPose: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::NavPoseFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::GPNavPose: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedNavPoseFactor>(factor);
-            break;
-          }
-          case fgo::factor::FactorTypeID::ConstAngularVelocity: {
-            thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::ConstAngularRateFactor>(factor);
-            break;
-          }
-          default: {
-            RCLCPP_ERROR_STREAM(appPtr_->get_logger(),
-                                "onResidualPublishing factor " << factor->getName() << " not implemented");
-            factorImplemented = false;
-            break;
-          }
-        }
+      std::for_each(factorVec.begin(), factorVec.end(),
+                    [&](const gtsam::NonlinearFactor::shared_ptr &factor) -> void {
+                      bool sampleResiduals = false;
+                      bool factorImplemented = true;
+                      gtsam::NoiseModelFactor::shared_ptr thisFactorCasted;
+                      const auto factorTypeID = factor->getTypeID();
+                      if (std::find(this->graphBaseParamPtr_->skippedFactorsForResiduals.begin(),
+                                    this->graphBaseParamPtr_->skippedFactorsForResiduals.end(), factorTypeID) !=
+                          this->graphBaseParamPtr_->skippedFactorsForResiduals.end()) {
+                        return;
+                      }
+                      switch (factorTypeID) {
+                        case fgo::factor::FactorTypeID::GPWNOAMotionPrior: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPWNOAPriorPose3>(factor);
+                          break;
+                        }
 
-        if (thisFactorCasted && factorImplemented) {
-          irt_nav_msgs::msg::FactorResidual res;
-          res.current_state_key = maxStateIndex;
-          res.factor_name = thisFactorCasted->getName();
-          gtsam::Values values;
-          const gtsam::KeyVector keys = thisFactorCasted->keys();
+                        case fgo::factor::FactorTypeID::CombinedIMU: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<gtsam::CombinedImuFactor>(factor);
+                          break;
+                        }
 
-          bool allKeyValued = true;
-          std::for_each(keys.cbegin(), keys.cend(), [&](size_t key) -> void {
-            if (result.exists(key))
-              values.insert(key, result.at(key));
-            else
-              allKeyValued = false;
-          });
+                        case fgo::factor::FactorTypeID::GPDoubleBetweenPose: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedDoublePose3BetweenFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPSingleBetweenPose: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedSinglePose3BetweenFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::ReceiverClock: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::ConstDriftFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::PRDR: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::PrDrFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPPRDR: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedPrDrFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::PR: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::PrFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPPR: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedPrFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPS: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPSFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPGPS: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedGPSFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::PVT: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::PVTFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPPVT: {
+                          sampleResiduals = true;
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedPVTFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::NavAttitude: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::NavAttitudeFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPNavAttitude: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedNavAttitudeFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::NavVelocity: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::NavVelocityFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPNavVelocity: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedNavVelocityFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::NavPose: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::NavPoseFactor>(factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::GPNavPose: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPInterpolatedNavPoseFactor>(
+                            factor);
+                          break;
+                        }
+                        case fgo::factor::FactorTypeID::ConstAngularVelocity: {
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::ConstAngularRateFactor>(factor);
+                          break;
+                        }
+                        default: {
+                          RCLCPP_ERROR_STREAM_ONCE(appPtr_->get_logger(),
+                                                   "onResidualPublishing factor " << factor->getName()
+                                                                                  << " not implemented");
+                          factorImplemented = false;
+                          break;
+                        }
+                      }
 
-          std::transform(keys.begin(), keys.end(), std::back_inserter(res.related_keys),
-                         [](const gtsam::Key &key) -> std::string {
-                           return gtsam::DefaultKeyFormatter(key);
-                         });
+                      /*
+                      if (thisFactorCasted && factorImplemented) {
+                        irt_nav_msgs::msg::FactorResidual res;
+                        res.current_state_key = maxStateIndex;
+                        res.factor_name = thisFactorCasted->getName();
+                        gtsam::Values values;
+                        const gtsam::KeyVector keys = thisFactorCasted->keys();
 
-          res.current_state_key = gtsam::symbolIndex(keys.back());
+                        bool allKeyValued = true;
+                        std::for_each(keys.cbegin(), keys.cend(), [&](size_t key) -> void {
+                          if (result.exists(key))
+                            values.insert(key, result.at(key));
+                          else
+                            allKeyValued = false;
+                        });
 
-          if (sampleResiduals) {
-            const auto keyPreOrdered = keys;
-            const auto [keyOrdered, keyIndicesAfterSorting] = fgo::utils::sortedKeyIndexes(keyPreOrdered);
-            // we calculate the joint information matrix of all related keys
-            const auto jointMarginalCovariance = marginals.jointMarginalCovariance(keys);
-            const auto jointCovNotOrdered = fgo::utils::rebuildJointMarginalMatrix(jointMarginalCovariance,
-                                                                                   keyOrdered,
-                                                                                   keyIndicesAfterSorting);
-            // and use this matrix to create a noise model. When using the noise model, the information matrix has been already trangularized using e.g., cholesky
-            const auto mean = thisFactorCasted->liftValuesAsVector(values);
-            auto sampleParam = std::make_shared<fgo::data::sampler::SamplerConfig>();
-            auto residualSampler = boost::make_shared<fgo::data::sampler::UnscentedSampler>(sampleParam, mean,
-                                                                                            jointCovNotOrdered);
-            const auto sigma_points = residualSampler->samples();
+                        std::transform(keys.begin(), keys.end(), std::back_inserter(res.related_keys),
+                                       [](const gtsam::Key &key) -> std::string {
+                                         return gtsam::DefaultKeyFormatter(key);
+                                       });
 
-            for (size_t i = 0; i < sigma_points.rows(); i++) {
-              irt_nav_msgs::msg::ResidualSample sample;
-              sample.id = i;
-              if (i == 0)
-                sample.type = sample.ESTIMATE;
-              else
-                sample.type = sample.SAMPLED_FROM_ESTIMATE;
+                        res.current_state_key = gtsam::symbolIndex(keys.back());
 
-              const auto state = sigma_points.block(i, 0, 1, mean.size()).transpose();
-              gtsam::Values sampledValues = thisFactorCasted->generateValuesFromStateVector(state);
+                        if (sampleResiduals) {
+                          const auto keyPreOrdered = keys;
+                          const auto [keyOrdered, keyIndicesAfterSorting] = fgo::utils::sortedKeyIndexes(
+                            keyPreOrdered);
+                          // we calculate the joint information matrix of all related keys
+                          const auto jointMarginalCovariance = marginals.jointMarginalCovariance(keys);
+                          const auto jointCovNotOrdered = fgo::utils::rebuildJointMarginalMatrix(
+                            jointMarginalCovariance,
+                            keyOrdered,
+                            keyIndicesAfterSorting);
+                          // and use this matrix to create a noise model. When using the noise model, the information matrix has been already trangularized using e.g., cholesky
+                          const auto mean = thisFactorCasted->liftValuesAsVector(values);
+                          auto sampleParam = std::make_shared<fgo::data::sampler::SamplerConfig>();
+                          auto residualSampler = boost::make_shared<fgo::data::sampler::UnscentedSampler>(sampleParam,
+                                                                                                          mean,
+                                                                                                          jointCovNotOrdered);
+                          const auto sigma_points = residualSampler->samples();
 
-              const auto unwhitenedError = thisFactorCasted->unwhitenedError(sampledValues);
-              const auto whitenedError = thisFactorCasted->whitenedError(sampledValues);
-              sample.unwhitened_error.resize(unwhitenedError.size());
-              gtsam::Vector::Map(&sample.unwhitened_error[0], unwhitenedError.size()) = unwhitenedError;
+                          for (size_t i = 0; i < sigma_points.rows(); i++) {
+                            irt_nav_msgs::msg::ResidualSample sample;
+                            sample.id = i;
+                            if (i == 0)
+                              sample.type = sample.ESTIMATE;
+                            else
+                              sample.type = sample.SAMPLED_FROM_ESTIMATE;
 
-              sample.whitened_error.resize(whitenedError.size());
-              gtsam::Vector::Map(&sample.whitened_error[0], whitenedError.size()) = whitenedError;
+                            const auto state = sigma_points.block(i, 0, 1, mean.size()).transpose();
+                            gtsam::Values sampledValues = thisFactorCasted->generateValuesFromStateVector(state);
 
-              sample.noise_model_weight = thisFactorCasted->weight(sampledValues);
-              sample.loss_error = thisFactorCasted->error(sampledValues);
-              res.samples.emplace_back(sample);
-            }
-          } else {
-            irt_nav_msgs::msg::ResidualSample sample;
-            sample.id = 0;
-            sample.type = sample.ESTIMATE;
-            const auto unwhitenedError = thisFactorCasted->unwhitenedError(values);
-            const auto whitenedError = thisFactorCasted->whitenedError(values);
-            sample.unwhitened_error.resize(unwhitenedError.size());
-            gtsam::Vector::Map(&sample.unwhitened_error[0], unwhitenedError.size()) = unwhitenedError;
+                            const auto unwhitenedError = thisFactorCasted->unwhitenedError(sampledValues);
+                            const auto whitenedError = thisFactorCasted->whitenedError(sampledValues);
+                            sample.unwhitened_error.resize(unwhitenedError.size());
+                            gtsam::Vector::Map(&sample.unwhitened_error[0], unwhitenedError.size()) = unwhitenedError;
 
-            sample.whitened_error.resize(whitenedError.size());
-            gtsam::Vector::Map(&sample.whitened_error[0], whitenedError.size()) = whitenedError;
+                            sample.whitened_error.resize(whitenedError.size());
+                            gtsam::Vector::Map(&sample.whitened_error[0], whitenedError.size()) = whitenedError;
 
-            sample.noise_model_weight = thisFactorCasted->weight(values);
-            sample.loss_error = thisFactorCasted->error(values);
-            res.samples.emplace_back(sample);
-          }
-          resMsg.residuals.emplace_back(res);
-        }
-      });
+                            sample.noise_model_weight = thisFactorCasted->weight(sampledValues);
+                            sample.loss_error = thisFactorCasted->error(sampledValues);
+                            res.samples.emplace_back(sample);
+                          }
+                        } else {
+                          irt_nav_msgs::msg::ResidualSample sample;
+                          sample.id = 0;
+                          sample.type = sample.ESTIMATE;
+                          const auto unwhitenedError = thisFactorCasted->unwhitenedError(values);
+                          const auto whitenedError = thisFactorCasted->whitenedError(values);
+                          sample.unwhitened_error.resize(unwhitenedError.size());
+                          gtsam::Vector::Map(&sample.unwhitened_error[0], unwhitenedError.size()) = unwhitenedError;
+
+                          sample.whitened_error.resize(whitenedError.size());
+                          gtsam::Vector::Map(&sample.whitened_error[0], whitenedError.size()) = whitenedError;
+
+                          sample.noise_model_weight = thisFactorCasted->weight(values);
+                          sample.loss_error = thisFactorCasted->error(values);
+                          res.samples.emplace_back(sample);
+                        }
+                        resMsg.residuals.emplace_back(res);
+                      }*/
+                    });
       pubResiduals_->publish(resMsg);
     }
   };
@@ -590,7 +591,6 @@ namespace fgo::graph {
     keyTimestampMap_[V(0)] =
     keyTimestampMap_[B(0)] = initTimestamp;
 
-    // ToDo:  @haoming, move this to TC GNSS integrator
     if (graphBaseParamPtr_->addConstDriftFactor) {
       auto priorClockErrorFactor = gtsam::PriorFactor<gtsam::Vector2>(C(0), initState.cbd, initState.cbdVar);
       priorClockErrorFactor.setTypeID(999);
@@ -602,6 +602,16 @@ namespace fgo::graph {
 
     currentKeyIndexTimestampMap_.insert(std::make_pair(nState_, initTimestamp));
 
+    //if(LIOParams_.useTDCarrierPhase)
+    //{
+    //auto noise_model = gtsam::noiseModel::Diagonal::Variances(1000 * gtsam::Vector::Ones(40));
+    //this->emplace_shared<gtsam::PriorFactor<gtsam::Vector>>(N(0), gtsam::Vector::Zero(40),
+    //                                                        noise_model);
+    //gtsam::Vector xVec; xVec.resize(40);
+    //values_.insert(N(0), gtsam::Vector::Zero(40));
+    //keyTimestampMap_[N(0)] = initTimestamp;
+    // }
+
     if (graphBaseParamPtr_->addGPPriorFactor || graphBaseParamPtr_->addGPInterpolatedFactor) {
       auto priorOmegaFactor = gtsam::PriorFactor<gtsam::Vector3>(W(0), initState.omega, initState.omegaVar);
       priorOmegaFactor.setTypeID(999);
@@ -609,16 +619,6 @@ namespace fgo::graph {
       this->push_back(priorOmegaFactor);
       values_.insert(W(0), initState.omega);
       keyTimestampMap_[W(0)] = initTimestamp;
-
-      if (graphBaseParamPtr_->fullGPPrior) {
-        auto priorAccFactor = gtsam::PriorFactor<gtsam::Vector6>(A(0), initState.accMeasured,
-                                                                 initState.accVar);
-        priorAccFactor.setTypeID(999);
-        priorAccFactor.setName("priorAccFactor");
-        this->push_back(priorAccFactor);
-        values_.insert(A(0), gtsam::Vector6(initState.accMeasured));
-        keyTimestampMap_[A(0)] = initTimestamp;
-      }
     }
 
     if (!graphBaseParamPtr_->addGPPriorFactor && graphBaseParamPtr_->addGPInterpolatedFactor) {

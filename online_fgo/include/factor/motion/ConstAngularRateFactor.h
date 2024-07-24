@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -32,7 +32,7 @@
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 
 namespace fgo::factor {
@@ -73,7 +73,7 @@ namespace fgo::factor {
     [[nodiscard]] gtsam::Vector evaluateError(const gtsam::Vector3 &omega, const gtsam::imuBias::ConstantBias &bias,
                                               boost::optional<gtsam::Matrix &> H1 = boost::none,
                                               boost::optional<gtsam::Matrix &> H2 = boost::none) const override {
-      if (useAutoDiff_) {
+      if (0 && useAutoDiff_) {
         if (H1)
           *H1 = gtsam::numericalDerivative11<gtsam::Vector3, gtsam::Vector3>(
             boost::bind(&This::evaluateError_, this, boost::placeholders::_1, bias), omega);

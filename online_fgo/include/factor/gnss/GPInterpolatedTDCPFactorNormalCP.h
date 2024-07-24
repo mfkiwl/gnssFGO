@@ -20,9 +20,9 @@
 #define ONLINE_FGO_GPINTERPOLATEDTDCPFACTORNORMALCP_H
 
 #include <utility>
-#include "model/gp_interpolator/GPWNOAInterpolator.h"
-#include "include/factor/FactorTypes.h"
-#include "factor/FactorTypeIDs.h"
+#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "include/factor/FactorType.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 
@@ -286,7 +286,6 @@ namespace fgo::factor {
     }
 
     /** return the measured */
-
     [[nodiscard]] gtsam::Vector measured() const {
       return (gtsam::Vector2() << this->phi_i, this->phi_j).finished();
     }

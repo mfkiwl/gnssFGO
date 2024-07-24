@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -31,6 +31,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <ublox_msgs/msg/nav_pvt.hpp>
 #include <ublox_msgs/msg/nav_clock.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 
 #include <novatel_oem7_msgs/msg/bestpos.hpp>
 #include <novatel_oem7_msgs/msg/bestvel.hpp>
@@ -38,8 +39,8 @@
 #include <novatel_oem7_msgs/msg/clockmodel.hpp>
 #include <novatel_oem7_msgs/msg/inspvax.hpp>
 #include <novatel_oem7_msgs/msg/inscov.hpp>
-#include "sensor/GNSS/GNSSDataParser.h"
-#include "data/DataTypes.h"
+#include "sensor/gnss/GNSSDataParser.h"
+#include "data/DataTypesFGO.h"
 #include "utils/GNSSUtils.h"
 
 
@@ -50,7 +51,11 @@ namespace fgo::data {
     NavFix = 3,
     Odometry = 4,
     NovAtelINSPVA = 5,
-    IRTGNSSObsPreProcessed = 6
+    IRTGNSSObsPreProcessed = 6,
+    PointCloud2 = 7,
+    MonoImage = 8,
+    StereoImage = 9,
+    Pose = 10,
   };
 
   const std::map<DataType, std::string> TypeMessageDict =
@@ -60,6 +65,10 @@ namespace fgo::data {
       {DataType::NovAtelINSPVA,          "NovAtelINSPVA"},
       {DataType::IRTGNSSObsPreProcessed, "IRTGNSSObsPreProcessed"},
       {DataType::IMU,                    "IMU"},
+      {DataType::PointCloud2,                    "PointCloud2"},
+      {DataType::MonoImage,                    "MonoImage"},
+      {DataType::StereoImage,                    "StereoImage"},
+      {DataType::Pose,                    "Pose"},
 
     };
 
@@ -70,6 +79,10 @@ namespace fgo::data {
       {"Odometry",               DataType::Odometry},
       {"NovAtelINSPVA",          DataType::NovAtelINSPVA},
       {"IRTGNSSObsPreProcessed", DataType::IRTGNSSObsPreProcessed},
+      {"PointCloud2", DataType::PointCloud2},
+      {"MonoImage", DataType::MonoImage},
+      {"StereoImage", DataType::StereoImage},
+      {"Pose", DataType::Pose},
 
     };
 
@@ -84,6 +97,15 @@ namespace fgo::data {
   static auto StateTimeGetter = FGODataTimeGetter<State>;
   static auto PVADataTimeGetter = FGODataTimeGetter<PVASolution>;
   static auto IMUDataTimeGetter = FGODataTimeGetter<IMUMeasurement>;
+  template<typename T>
+  static auto ROSMessageTimeGetter = [](const T &msg) -> rclcpp::Time {
+    return rclcpp::Time(msg.header.stamp.sec, msg.header.stamp.nanosec, RCL_ROS_TIME);
+  };
+
+  template<typename T>
+  static auto ROSMessagePtrTimeGetter = [](T msg) -> rclcpp::Time {
+    return rclcpp::Time(msg->header.stamp.sec, msg->header.stamp.nanosec, RCL_ROS_TIME);
+  };
 
   static auto GNSSDataTimeGetter = [](const GNSSMeasurement &data) -> rclcpp::Time {
     return data.measMainAnt.timestamp;
@@ -92,6 +114,17 @@ namespace fgo::data {
   static auto onPVASolutionData = [](const std::vector<PVASolution> &pvas) {
 
   };
+
+  inline fgo::data::Pose msg2FGOPose(const geometry_msgs::msg::PoseStamped &poseMsg) {
+    data::Pose pose;
+    pose.timestamp = rclcpp::Time(poseMsg.header.stamp.sec, poseMsg.header.stamp.nanosec, RCL_ROS_TIME);
+    pose.pose = gtsam::Pose3(
+      gtsam::Rot3(poseMsg.pose.orientation.w, poseMsg.pose.orientation.x, poseMsg.pose.orientation.y,
+                  poseMsg.pose.orientation.z),
+      gtsam::Point3(poseMsg.pose.position.x, poseMsg.pose.position.y, poseMsg.pose.position.z));
+    pose.poseVar = gtsam::Matrix66::Identity() * 0.01;
+    return pose;
+  }
 
   inline IMUMeasurement msg2IMUMeasurement(const sensor_msgs::msg::Imu &imuMsg,
                                            const rclcpp::Time &timestamp,

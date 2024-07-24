@@ -22,7 +22,7 @@
 #include <gtsam/base/Testable.h>
 #include <gtsam/base/Lie.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 // This will trigger a LNKxxxx on MSVC, so disable for MSVC build
 // Please refer to https://github.com/borglab/gtsam/blob/develop/Using-GTSAM-EXPORT.md

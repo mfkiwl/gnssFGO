@@ -22,12 +22,9 @@
 namespace fgo::integrator {
   void GNSSLCIntegrator::initialize(rclcpp::Node &node, graph::GraphBase &graphPtr, const std::string &integratorName,
                                     bool isPrimarySensor) {
-    integratorName_ = integratorName;
-    isPrimarySensor_ = isPrimarySensor;
-    rosNodePtr_ = &node;
-    graphPtr_ = &graphPtr;
-    this->initIntegratorBaseParams();
-
+    IntegratorBase::initialize(node, graphPtr, integratorName, isPrimarySensor);
+    RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                       "--------------------- " << integratorName << ": start initialization... ---------------------");
     paramPtr_ = std::make_shared<IntegratorGNSSLCParams>(integratorBaseParamPtr_);
 
     /*
@@ -138,14 +135,6 @@ namespace fgo::integrator {
     ::utils::RosParameter<bool> notIntegrating("GNSSFGO." + integratorName_ + ".notIntegrating", false, *rosNodePtr_);
     paramPtr_->notIntegrating = notIntegrating.value();
 
-    // reloading the leverarm
-    std::vector<double> lbOri = {paramPtr_->transIMUToAnt1.x(), paramPtr_->transIMUToAnt1.y(),
-                                 paramPtr_->transIMUToAnt1.z()};
-    RosParameter<std::vector<double>> lb("GNSSFGO." + integratorName_ + ".transIMUToGNSSAnt1", lbOri, *rosNodePtr_);
-    paramPtr_->transIMUToAnt1 = gtsam::Vector3(lb.value().data());
-
-    RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "LeverARMToAnt1: " << paramPtr_->transIMUToAnt1);
-    RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "LeverARMToAnt2: " << paramPtr_->transIMUToAnt2);
     RosParameter<bool> useForInitialization("GNSSFGO." + integratorName_ + ".useForInitialization", *rosNodePtr_);
     paramPtr_->useForInitialization = useForInitialization.value();
     RosParameter<bool> useHeaderTimestamp("GNSSFGO." + integratorName_ + ".useHeaderTimestamp", *rosNodePtr_);
@@ -170,132 +159,133 @@ namespace fgo::integrator {
     RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "varScaleHeadingSingle: " << varScaleHeadingSingle.value());
     paramPtr_->varScaleHeadingSingle = varScaleHeadingSingle.value();
 
-    RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "bound: " << paramPtr_->StateMeasSyncLowerBound);
 
+    if (!paramPtr_->offlineProcess) {
+      if (PVTSource.value() == "oem7") {
+        RosParameter<std::string> bestposTopic("GNSSFGO." + integratorName_ + ".NovatelBestposTopic",
+                                               "/novatel/oem7/bestpos", node);
+        RosParameter<std::string> bestvelTopic("GNSSFGO." + integratorName_ + ".NovatelBestvelTopic",
+                                               "/novatel/oem7/bestvel", node);
+        if (paramPtr_->integrateVelocity) {
+          subNovatelBestpos_.subscribe(&node, bestposTopic.value());
+          subNovatelBestvel_.subscribe(&node, bestvelTopic.value());
+          if (hasHeading.value()) {
+            RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                               integratorName_ + ":: using oem7 with velocity and heading ...");
+            RosParameter<std::string> headingTopic("GNSSFGO." + integratorName_ + ".NovatelHeadingTopic",
+                                                   "/novatel/oem7/dualantennaheading", node);
+            subNovatelHeading_.subscribe(&node, headingTopic.value());
 
-    if (PVTSource.value() == "oem7") {
-      RosParameter<std::string> bestposTopic("GNSSFGO." + integratorName_ + ".NovatelBestposTopic",
-                                             "/novatel/oem7/bestpos", node);
-      RosParameter<std::string> bestvelTopic("GNSSFGO." + integratorName_ + ".NovatelBestvelTopic",
-                                             "/novatel/oem7/bestvel", node);
-      if (paramPtr_->integrateVelocity) {
-        subNovatelBestpos_.subscribe(&node, bestposTopic.value());
-        subNovatelBestvel_.subscribe(&node, bestvelTopic.value());
-        if (hasHeading.value()) {
-          RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
-                             integratorName_ + ":: using oem7 with velocity and heading ...");
-          RosParameter<std::string> headingTopic("GNSSFGO." + integratorName_ + ".NovatelHeadingTopic",
-                                                 "/novatel/oem7/dualantennaheading", node);
-          subNovatelHeading_.subscribe(&node, headingTopic.value());
-
-          novatelPVTDualAntennaSync_ = std::make_unique<message_filters::Synchronizer<OEM7DualAntennaSyncPolicy>>(
-            OEM7DualAntennaSyncPolicy(solutionSyncQueueSize.value()),
-            subNovatelBestpos_,
-            subNovatelBestvel_,
-            subNovatelHeading_);
-          novatelPVTDualAntennaSync_->setAgePenalty(0);
-          novatelPVTDualAntennaSync_->setInterMessageLowerBound(0, rclcpp::Duration(0, msgLowerBound.value()));
-          novatelPVTDualAntennaSync_->setInterMessageLowerBound(1, rclcpp::Duration(0, msgLowerBound.value()));
-          novatelPVTDualAntennaSync_->setInterMessageLowerBound(2, rclcpp::Duration(0, msgLowerBound.value()));
-          novatelPVTDualAntennaSync_->registerCallback(
-            std::bind(&GNSSLCIntegrator::onOEM7PVTHeadingMsgCb, this, std::placeholders::_1, std::placeholders::_2,
-                      std::placeholders::_3));
+            novatelPVTDualAntennaSync_ = std::make_unique<message_filters::Synchronizer<OEM7DualAntennaSyncPolicy>>(
+              OEM7DualAntennaSyncPolicy(solutionSyncQueueSize.value()),
+              subNovatelBestpos_,
+              subNovatelBestvel_,
+              subNovatelHeading_);
+            novatelPVTDualAntennaSync_->setAgePenalty(0);
+            novatelPVTDualAntennaSync_->setInterMessageLowerBound(0, rclcpp::Duration(0, msgLowerBound.value()));
+            novatelPVTDualAntennaSync_->setInterMessageLowerBound(1, rclcpp::Duration(0, msgLowerBound.value()));
+            novatelPVTDualAntennaSync_->setInterMessageLowerBound(2, rclcpp::Duration(0, msgLowerBound.value()));
+            novatelPVTDualAntennaSync_->registerCallback(
+              std::bind(&GNSSLCIntegrator::onOEM7PVTHeadingMsgCb, this, std::placeholders::_1, std::placeholders::_2,
+                        std::placeholders::_3));
+          } else {
+            RCLCPP_INFO(rosNodePtr_->get_logger(), "[GNSSLCIntegrator]: using oem7 with velocity without heading ...");
+            novatelPVTSync_ = std::make_unique<message_filters::Synchronizer<OEM7SyncPolicy>>(
+              OEM7SyncPolicy(solutionSyncQueueSize.value()),
+              subNovatelBestpos_,
+              subNovatelBestvel_);
+            novatelPVTSync_->setAgePenalty(0);
+            novatelPVTSync_->setInterMessageLowerBound(0, rclcpp::Duration(0, msgLowerBound.value()));
+            novatelPVTSync_->setInterMessageLowerBound(1, rclcpp::Duration(0, msgLowerBound.value()));
+            novatelPVTSync_->registerCallback(
+              std::bind(&GNSSLCIntegrator::onOEM7PVTMsgCb, this, std::placeholders::_1, std::placeholders::_2));
+          }
         } else {
-          RCLCPP_INFO(rosNodePtr_->get_logger(), "[GNSSLCIntegrator]: using oem7 with velocity without heading ...");
-          novatelPVTSync_ = std::make_unique<message_filters::Synchronizer<OEM7SyncPolicy>>(
-            OEM7SyncPolicy(solutionSyncQueueSize.value()),
-            subNovatelBestpos_,
-            subNovatelBestvel_);
-          novatelPVTSync_->setAgePenalty(0);
-          novatelPVTSync_->setInterMessageLowerBound(0, rclcpp::Duration(0, msgLowerBound.value()));
-          novatelPVTSync_->setInterMessageLowerBound(1, rclcpp::Duration(0, msgLowerBound.value()));
-          novatelPVTSync_->registerCallback(
-            std::bind(&GNSSLCIntegrator::onOEM7PVTMsgCb, this, std::placeholders::_1, std::placeholders::_2));
+          RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                             integratorName_ + ": using oem7 without velocity and heading ...");
+          subNovatelBestposAlone_ = rosNodePtr_->create_subscription<novatel_oem7_msgs::msg::BESTPOS>(
+            bestposTopic.value(),
+            rclcpp::SystemDefaultsQoS(),
+            std::bind(&GNSSLCIntegrator::onOEM7Bestpos, this, std::placeholders::_1));
+
         }
-      } else {
-        RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
-                           integratorName_ + ": using oem7 without velocity and heading ...");
-        subNovatelBestposAlone_ = rosNodePtr_->create_subscription<novatel_oem7_msgs::msg::BESTPOS>(
-          bestposTopic.value(),
-          rclcpp::SystemDefaultsQoS(),
-          std::bind(&GNSSLCIntegrator::onOEM7Bestpos, this, std::placeholders::_1));
 
-      }
-
-    } else if (PVTSource.value() == "ublox") {
-      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": using ublox with velocity and heading ...");
-      RosParameter<std::string> ubloxNavPVTTopic("GNSSFGO." + integratorName_ + ".ubloxPVTTopic", "/ublox/navpvt",
-                                                 node);
-      subUbloxPVT_ = rosNodePtr_->create_subscription<ublox_msgs::msg::NavPVT>(ubloxNavPVTTopic.value(),
-                                                                               rclcpp::SystemDefaultsQoS(),
-                                                                               std::bind(
-                                                                                 &GNSSLCIntegrator::onUbloxPVTMsgCb,
-                                                                                 this, std::placeholders::_1));
-
-    } else if (PVTSource.value() == "navfix") {
-      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
-                         integratorName_ + ": using navfix without velocity and heading ...");
-      RosParameter<std::string> navFixTopic("GNSSFGO." + integratorName_ + ".navfixTopic", "/ublox/fix", node);
-
-      subNavfix_ = rosNodePtr_->create_subscription<sensor_msgs::msg::NavSatFix>(navFixTopic.value(),
+      } else if (PVTSource.value() == "ublox") {
+        RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": using ublox with velocity and heading ...");
+        RosParameter<std::string> ubloxNavPVTTopic("GNSSFGO." + integratorName_ + ".ubloxPVTTopic", "/ublox/navpvt",
+                                                   node);
+        subUbloxPVT_ = rosNodePtr_->create_subscription<ublox_msgs::msg::NavPVT>(ubloxNavPVTTopic.value(),
                                                                                  rclcpp::SystemDefaultsQoS(),
                                                                                  std::bind(
-                                                                                   &GNSSLCIntegrator::onNavFixMsgCb,
+                                                                                   &GNSSLCIntegrator::onUbloxPVTMsgCb,
                                                                                    this, std::placeholders::_1));
 
-    } else if (PVTSource.value() == "span") {
-      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": using span with velocity and heading ...");
-      subNovatelPVA_ = rosNodePtr_->create_subscription<novatel_oem7_msgs::msg::INSPVAX>("/novatel_data/inspvax",
-                                                                                         rclcpp::SensorDataQoS(),
-                                                                                         std::bind(
-                                                                                           &GNSSLCIntegrator::onINSPVAXMsgCb,
-                                                                                           this,
-                                                                                           std::placeholders::_1));
-    } else if (PVTSource.value() == "irt") {
-      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": using irt pva with velocity and heading ...");
-      callbackGroupMap_.insert(std::make_pair("PVTDelayCalculator", rosNodePtr_->create_callback_group(
-        rclcpp::CallbackGroupType::MutuallyExclusive)));
-      callbackGroupMap_.insert(
-        std::make_pair("PPS", rosNodePtr_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive)));
-      callbackGroupMap_.insert(
-        std::make_pair("PVA", rosNodePtr_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive)));
-      PVTDelayCalculator_ = std::make_unique<fgo::utils::MeasurementDelayCalculator>(*rosNodePtr_,
-                                                                                     callbackGroupMap_["PVTDelayCalculator"],
-                                                                                     false);
+      } else if (PVTSource.value() == "navfix") {
+        RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                           integratorName_ + ": using navfix without velocity and heading ...");
+        RosParameter<std::string> navFixTopic("GNSSFGO." + integratorName_ + ".navfixTopic", "/ublox/fix", node);
 
-      auto subPPSopt = rclcpp::SubscriptionOptions();
-      subPPSopt.callback_group = callbackGroupMap_["PPS"];
-      subPPS_ = rosNodePtr_->create_subscription<irt_nav_msgs::msg::PPS>("/irt_gpio_novatel/jetson_pps",
-                                                                         rclcpp::SystemDefaultsQoS(),
-                                                                         [this](
-                                                                           const irt_nav_msgs::msg::PPS::ConstSharedPtr msg) -> void {
-                                                                           PVTDelayCalculator_->setPPS(msg);
-                                                                           //RCLCPP_INFO_STREAM(this->get_logger(), "onPPS: " << msg->pps_counter);
-                                                                         },
-                                                                         subPPSopt);
+        subNavfix_ = rosNodePtr_->create_subscription<sensor_msgs::msg::NavSatFix>(navFixTopic.value(),
+                                                                                   rclcpp::SystemDefaultsQoS(),
+                                                                                   std::bind(
+                                                                                     &GNSSLCIntegrator::onNavFixMsgCb,
+                                                                                     this, std::placeholders::_1));
 
-      auto subPVAOpt = rclcpp::SubscriptionOptions();
-      subPVAOpt.callback_group = callbackGroupMap_["PVA"];
-      subPVA_ = rosNodePtr_->create_subscription<irt_nav_msgs::msg::PVAGeodetic>("/irt_gnss_preprocessing/PVT",
-                                                                                 rclcpp::SensorDataQoS(),
-                                                                                 std::bind(
-                                                                                   &GNSSLCIntegrator::onIRTPVTMsgCb,
-                                                                                   this, std::placeholders::_1),
-                                                                                 subPVAOpt);
-    } else if (PVTSource.value() == "boreas") {
-      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": using boreas pva ...");
-      RosParameter<std::string> boreasTopic("GNSSFGO." + integratorName_ + ".odomPVATopic", "/boreas/gps_raw", node);
-      auto subPVAOpt = rclcpp::SubscriptionOptions();
-      subPVAOpt.callback_group = callbackGroupMap_["PVA"];
-      subPVAOdom_ = rosNodePtr_->create_subscription<nav_msgs::msg::Odometry>(boreasTopic.value(),
-                                                                              rclcpp::SystemDefaultsQoS(),
-                                                                              std::bind(&GNSSLCIntegrator::onOdomMsgCb,
-                                                                                        this, std::placeholders::_1),
-                                                                              subPVAOpt);
+      } else if (PVTSource.value() == "span") {
+        RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": using span with velocity and heading ...");
+        subNovatelPVA_ = rosNodePtr_->create_subscription<novatel_oem7_msgs::msg::INSPVAX>("/novatel_data/inspvax",
+                                                                                           rclcpp::SensorDataQoS(),
+                                                                                           std::bind(
+                                                                                             &GNSSLCIntegrator::onINSPVAXMsgCb,
+                                                                                             this,
+                                                                                             std::placeholders::_1));
+      } else if (PVTSource.value() == "irt") {
+        RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                           integratorName_ + ": using irt pva with velocity and heading ...");
+        callbackGroupMap_.insert(std::make_pair("PVTDelayCalculator", rosNodePtr_->create_callback_group(
+          rclcpp::CallbackGroupType::MutuallyExclusive)));
+        callbackGroupMap_.insert(
+          std::make_pair("PPS", rosNodePtr_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive)));
+        callbackGroupMap_.insert(
+          std::make_pair("PVA", rosNodePtr_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive)));
+        PVTDelayCalculator_ = std::make_unique<fgo::utils::MeasurementDelayCalculator>(*rosNodePtr_,
+                                                                                       callbackGroupMap_["PVTDelayCalculator"],
+                                                                                       false);
 
-    } else {
-      RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
-                         integratorName_ + ": PVTSource " << PVTSource.value() << " is not supported!");
+        auto subPPSopt = rclcpp::SubscriptionOptions();
+        subPPSopt.callback_group = callbackGroupMap_["PPS"];
+        subPPS_ = rosNodePtr_->create_subscription<irt_nav_msgs::msg::PPS>("/irt_gpio_novatel/jetson_pps",
+                                                                           rclcpp::SystemDefaultsQoS(),
+                                                                           [this](
+                                                                             const irt_nav_msgs::msg::PPS::ConstSharedPtr msg) -> void {
+                                                                             PVTDelayCalculator_->setPPS(msg);
+                                                                             //RCLCPP_INFO_STREAM(this->get_logger(), "onPPS: " << msg->pps_counter);
+                                                                           },
+                                                                           subPPSopt);
+
+        auto subPVAOpt = rclcpp::SubscriptionOptions();
+        subPVAOpt.callback_group = callbackGroupMap_["PVA"];
+        subPVA_ = rosNodePtr_->create_subscription<irt_nav_msgs::msg::PVAGeodetic>("/irt_gnss_preprocessing/PVT",
+                                                                                   rclcpp::SensorDataQoS(),
+                                                                                   std::bind(
+                                                                                     &GNSSLCIntegrator::onIRTPVTMsgCb,
+                                                                                     this, std::placeholders::_1),
+                                                                                   subPVAOpt);
+      } else if (PVTSource.value() == "boreas") {
+        RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": using boreas pva ...");
+        RosParameter<std::string> boreasTopic("GNSSFGO." + integratorName_ + ".odomPVATopic", "/boreas/gps_raw", node);
+        auto subPVAOpt = rclcpp::SubscriptionOptions();
+        subPVAOpt.callback_group = callbackGroupMap_["PVA"];
+        subPVAOdom_ = rosNodePtr_->create_subscription<nav_msgs::msg::Odometry>(boreasTopic.value(),
+                                                                                rclcpp::SystemDefaultsQoS(),
+                                                                                std::bind(
+                                                                                  &GNSSLCIntegrator::onOdomMsgCb,
+                                                                                  this, std::placeholders::_1),
+                                                                                subPVAOpt);
+      } else {
+        RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
+                           integratorName_ + ": PVTSource " << PVTSource.value() << " is not supported!");
+      }
     }
 
     pubPVAInFGOStata_ = rosNodePtr_->create_publisher<irt_nav_msgs::msg::FGOState>("pvaInFGOState",
@@ -306,16 +296,12 @@ namespace fgo::integrator {
         gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
         paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
     } else if (paramPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
+      interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
         gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
         paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
     } else {
       RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": NO gpType chosen. Please choose.");
     }
-
-    pubSensorReport_ = rosNodePtr_->create_publisher<irt_nav_msgs::msg::SensorProcessingReport>(
-      "sensor_processing_report/" + integratorName_,
-      rclcpp::SystemDefaultsQoS());
 
     RCLCPP_INFO(rosNodePtr_->get_logger(), "--------------------- GNSSLCIntegrator initialized! ---------------------");
   }
@@ -332,10 +318,11 @@ namespace fgo::integrator {
       RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), std::fixed << integratorName_ + " not integrating ...");
       return true;
     }
+    static const auto baseToSensorTrans = sensorCalibManager_->getTransformationFromBase(sensorName_);
 
     static gtsam::Key pose_key_j, vel_key_j, omega_key_j, bias_key_j,
       pose_key_i, vel_key_i, omega_key_i, bias_key_i,
-      pose_key_sync, vel_key_sync, bias_key_sync, omega_key_sync;
+      pose_key_sync, vel_key_sync, bias_key_sync;
 
     static boost::circular_buffer<fgo::data::PVASolution> restGNSSMeas(100);
 
@@ -346,12 +333,12 @@ namespace fgo::integrator {
       restGNSSMeas.clear();
     }
 
-    RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
-                       std::fixed << integratorName_ + ": integrating with " << dataSensor.size() << " pvt data");
+    //RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
+    //                   std::fixed << integratorName_ + ": integrating with " << dataSensor.size() << " pvt data");
 
     auto pvaIter = dataSensor.begin();
     while (pvaIter != dataSensor.end()) {
-      const auto corrected_time = pvaIter->timestamp.seconds() - pvaIter->delay;
+      auto corrected_time = pvaIter->timestamp.seconds() - pvaIter->delay;
       auto posVarScale = paramPtr_->posVarScale;
       auto velVarScale = paramPtr_->velVarScale;
       auto rotVarScale = paramPtr_->headingVarScale;
@@ -389,11 +376,10 @@ namespace fgo::integrator {
           default:
             break;
         }
-      } else
-        RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": PVA in RTK-fixed mode");
+      }
 
-      const auto integrateVelocity = paramPtr_->integrateVelocity && pvaIter->has_velocity;
-      const auto integrateAttitude = paramPtr_->integrateAttitude && pvaIter->has_heading;
+      auto integrateVelocity = paramPtr_->integrateVelocity && pvaIter->has_velocity;
+      auto integrateAttitude = paramPtr_->integrateAttitude && pvaIter->has_heading;
 
       RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
                          std::fixed << integratorName_ + ": Current PVA ts: " << corrected_time
@@ -403,6 +389,7 @@ namespace fgo::integrator {
       //std::cout << "current pos var: " << pvaIter->xyz_var * posVarScale << std::endl;
       //std::cout << "current pos var: " << pvaIter->vel_var * velVarScale << std::endl;
       //std::cout << "ecef: " << pvaIter->xyz_ecef << std::endl;
+      //std::cout << "vel_n: " << pvaIter->vel_n << std::endl;
 
       auto syncResult = findStateForMeasurement(currentKeyIndexTimestampMap, corrected_time, paramPtr_);
       const auto current_pred_state = timePredStates.back().second; //graph::querryCurrentPredictedState(timePredStates, corrected_time);
@@ -423,43 +410,31 @@ namespace fgo::integrator {
                                                                                            << " DurationToI: "
                                                                                            << syncResult.durationFromStateI);
 
-      if (syncResult.durationFromStateI > 1.) {
-        RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(),
-                            integratorName_ + ": DIRTY fix, jump measurement falling between zero-velocity trick");
-        return true;
-      }
-
       if (syncResult.stateJExist()) {
         pose_key_i = X(syncResult.keyIndexI);
         vel_key_i = V(syncResult.keyIndexI);
         omega_key_i = W(syncResult.keyIndexI);
+        bias_key_i = B(syncResult.keyIndexI);
 
         pose_key_j = X(syncResult.keyIndexJ);
         vel_key_j = V(syncResult.keyIndexJ);
         omega_key_j = W(syncResult.keyIndexJ);
+        bias_key_j = B(syncResult.keyIndexJ);
         // RCLCPP_ERROR_STREAM(appPtr_->get_logger(), "accI.head(3): " << accI.head(3) << "\n" << accI.tail(3));
       } else {
         RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": GP PVT: NO state J found !!! ");
       }
 
-      gtsam::Vector3 thisVelocity;
-
-      if (paramPtr_->velocityFrame == fgo::factor::MeasurementFrame::ECEF)
-        thisVelocity = pvaIter->vel_ecef;
-      else if (paramPtr_->velocityFrame == fgo::factor::MeasurementFrame::NED ||
-               paramPtr_->velocityFrame == fgo::factor::MeasurementFrame::ENU)
-        thisVelocity = pvaIter->vel_n;
-
       if (syncResult.status == StateMeasSyncStatus::SYNCHRONIZED_I ||
           syncResult.status == StateMeasSyncStatus::SYNCHRONIZED_J) {
-        //auto [foundGyro, this_gyro] = findOmegaToMeasurement(corrected_time, timestampGyroMap);
+        const auto [foundGyro, this_gyro] = findOmegaToMeasurement(corrected_time, timestampGyroMap);
         //this_gyro = current_pred_state.imuBias.correctGyroscope(this_gyro);
 
         // now we found a state which is synchronized with the GNSS obs
         if (syncResult.status == StateMeasSyncStatus::SYNCHRONIZED_I) {
           pose_key_sync = pose_key_i;
           vel_key_sync = vel_key_i;
-          omega_key_sync = omega_key_i;
+          bias_key_sync = bias_key_i;
           RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
                              integratorName_ + ": Found time synchronized state at I "
                                << gtsam::symbolIndex(pose_key_sync)
@@ -469,7 +444,7 @@ namespace fgo::integrator {
         } else {
           pose_key_sync = pose_key_j;
           vel_key_sync = vel_key_j;
-          omega_key_sync = omega_key_j;
+          bias_key_sync = bias_key_j;
           RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
                              integratorName_ + ": Found time synchronized state at J "
                                << gtsam::symbolIndex(pose_key_sync)
@@ -477,23 +452,25 @@ namespace fgo::integrator {
                                " with time difference: "
                                << syncResult.durationFromStateI);
         }
-
+        //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "vel measured: " << pvaIter->vel_n);
+        //const auto currentVelNED = gtsam::Rot3(fgo::utils::nedRe_Matrix(current_pred_state.state.position())).rotate(current_pred_state.state.velocity());
+        // RCLCPP_INFO_STREAM(appPtr_->get_logger(), "vel current: " << currentVelNED);
 
         if (integrateVelocity) {
-          RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "Integrating PVT ...");
+          //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "Integrating PVT ...");
 
-          this->addGNSSPVTFactor(pose_key_sync, vel_key_sync, omega_key_sync, pvaIter->xyz_ecef, thisVelocity,
+          this->addGNSSPVTFactor(pose_key_sync, vel_key_sync, bias_key_sync, pvaIter->xyz_ecef, pvaIter->vel_ecef,
                                  pvaIter->xyz_var * posVarScale, pvaIter->vel_var * velVarScale,
-                                 paramPtr_->transIMUToAnt1);
+                                 baseToSensorTrans.translation());
         } else {
-          RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "Integrating GNSS positioning ...");
+          //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "Integrating GNSS positioning ...");
           this->addGNSSFactor(pose_key_sync, pvaIter->xyz_ecef, pvaIter->xyz_var * posVarScale,
-                              paramPtr_->transIMUToAnt1);
+                              baseToSensorTrans.translation());
         }
 
         if (integrateAttitude && pvaIter->has_heading) {
-          RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "Integrating GNSS Attitude ...");
-          this->addNavAttitudeFactor(pose_key_sync, pvaIter->rot, pvaIter->rot_var * rotVarScale,
+          //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "Integrating GNSS Attitude ...");
+          this->addNavAttitudeFactor(pose_key_sync, pvaIter->rot_n, pvaIter->rot_var * rotVarScale,
                                      paramPtr_->attitudeType);
         }
       } else if (syncResult.status == StateMeasSyncStatus::INTERPOLATED && paramPtr_->addGPInterpolatedFactor) {
@@ -504,7 +481,9 @@ namespace fgo::integrator {
                                                                                  << syncResult.durationFromStateI);
         const double delta_t = syncResult.timestampJ - syncResult.timestampI;
         const double taui = syncResult.durationFromStateI;
-
+        //recalculate interpolator // set up interpolator
+        //corrected_time_gnss_meas - timestampI;
+        //RCLCPP_INFO_STREAM(appPtr_->get_logger(), integratorName_ + ": GP delta: " << delta_t << " tau: " << taui);
         //ALSO NEEDED FOR DDCP TDCP, AND THATS IN SYNCED CASE AND IN NOT SYNCED CASE
 
         if (paramPtr_->gpType == fgo::data::GPModelType::WNOJ) {
@@ -514,18 +493,18 @@ namespace fgo::integrator {
           interpolator_->recalculate(delta_t, taui);
 
         if (integrateVelocity) {
-          RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "Integrating GP interpolated PVT ...");
+          //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "Integrating GP interpolated PVT ...");
           this->addGPInterpolatedGNSSPVTFactor(pose_key_i, vel_key_i, omega_key_i,
                                                pose_key_j, vel_key_j, omega_key_j,
-                                               pvaIter->xyz_ecef, thisVelocity,
+                                               pvaIter->xyz_ecef, pvaIter->vel_ecef,
                                                pvaIter->xyz_var * posVarScale, pvaIter->vel_var * velVarScale,
-                                               paramPtr_->transIMUToAnt1, interpolator_);
+                                               baseToSensorTrans.translation(), interpolator_);
         } else {
           //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "Integrating GP interpolated GNSS positioning ...");
           this->addGPInterpolatedGNSSFactor(pose_key_i, vel_key_i, omega_key_i,
                                             pose_key_j, vel_key_j, omega_key_j,
                                             pvaIter->xyz_ecef, pvaIter->xyz_var * posVarScale,
-                                            paramPtr_->transIMUToAnt1, interpolator_);
+                                            baseToSensorTrans.translation(), interpolator_);
         }
 
         if (integrateAttitude && pvaIter->has_heading) {
@@ -533,7 +512,7 @@ namespace fgo::integrator {
 
           this->addGPInterpolatedNavAttitudeFactor(pose_key_i, vel_key_i, omega_key_i,
                                                    pose_key_j, vel_key_j, omega_key_j,
-                                                   pvaIter->rot, pvaIter->rot_var * rotVarScale,
+                                                   pvaIter->rot_n, pvaIter->rot_var * rotVarScale,
                                                    interpolator_, paramPtr_->attitudeType);
         }
       } else if (syncResult.status == StateMeasSyncStatus::CACHED) {

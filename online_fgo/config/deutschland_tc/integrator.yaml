@@ -7,8 +7,12 @@
         IMUSensorSyncTimeThreshold: 0.005
 
       GNSSTCIntegrator:
+        notIntegrating: false
         NLOSCSVFilePath: ""
         integratorPlugin: "GNSSTCIntegrator"
+        sensorName: "reference"
+        sensorAntMain: "novatel_ant_main"
+        sensorAntAux: "novatel_ant_aux"
         GNSSMeasurementFrequency: 10
         zeroVelocityThreshold: 0.04
 
@@ -49,7 +53,9 @@
         robustParamTDCP: 0.5
 
       IRTPVALCIntegrator:
+        notIntegrating: false
         integratorPlugin: "GNSSLCIntegrator"
+        sensorName: "novatel_ant_main"
         useForInitialization: false
         useHeaderTimestamp: true
         GNSSMeasurementFrequency: 10
@@ -91,6 +97,7 @@
       LIOIntegrator:
         notIntegrating: false
         integratorPlugin: "LIOIntegrator"
+        sensorName: "vlp16"
         pointCloudTopic: "/velodyne_points"
         lidarFrame: "velodyne"
         baselinkFrame: "base_link"
@@ -156,6 +163,8 @@
 
       CorrevitIntegrator:
         integratorPlugin: "CorrevitIntegrator"
+        sensorName: "correvit"
+        notIntegrating: true
         integrateVelocity: false
         enablePreIntegration: false
         velocitySigma: 0.1

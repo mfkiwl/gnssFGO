@@ -1,13 +1,15 @@
 ---
-/deutschland/online_fgo:
+/kitti/online_fgo:
   ros__parameters:
     GNSSFGO:
       IntegratorBase:
         StateSensorSyncTimeThreshold: 0.02
         IMUSensorSyncTimeThreshold: 0.005
 
-      IRTPVALCIntegrator:
+      GNSSPVALCIntegrator:
+        notIntegrating: false
         integratorPlugin: "GNSSLCIntegrator"
+        sensorName: "gnss"
         useForInitialization: true
         useHeaderTimestamp: true
         GNSSMeasurementFrequency: 10
@@ -39,71 +41,10 @@
         robustParamVel: 0.5
         robustParamAtt: 0.5
 
-      UbloxLCIntegrator:
-        integratorPlugin: "GNSSLCIntegrator"
-        useForInitialization: false
-        useHeaderTimestamp: true
-        transIMUToGNSSAnt1: [ 0., 0., -0.04 ] # [0.0, 0.0, 0.0]
-
-        GNSSMeasurementFrequency: 10
-        PVTSource: "ublox"
-        hasHeading: true
-        hasPitch: false
-        hasRoll: false
-        integrateAttitude: false
-        integrateVelocity: false
-        onlyRTKFixed: false
-
-        solutionSyncQueueSize: 10
-        MsgSyncLowerBound: 50000000
-
-        fixedVelVar: 0.25
-        posVarScale: 10.
-        velVarScale: 1.
-        headingVarScale: 1.
-        headingOffsetDeg: 0.
-
-        attitudeFrame: "ned"
-        attitudeType: "yaw"
-        velocityFrame: "ned"
-        velocityType: "3d"
-        noiseModelAttitude: "cauchy"
-        noiseModelVelocity: "cauchy"
-        noiseModelPosition: "cauchy"
-        robustParamPos: 0.5
-        robustParamVel: 0.5
-        robustParamAtt: 0.5
-
-        NovatelBestposTopic: "/novatel/oem7/bestpos"
-        NovatelBestvelTopic: "/novatel/oem7/bestvel"
-        NovatelHeadingTopic: "/novatel/oem7/dualantennaheading"
-
-        ubloxPVTTopic: "/ublox/navpvt"
-        navfixTopic: "/ublox/fix"
-
-      CorrevitIntegrator:
-        integratorPlugin: "CorrevitIntegrator"
-        integrateVelocity: true
-        solutionSyncQueueSize: 10
-        MsgSyncLowerBound: 50000000
-        nearZeroVelocityThreshold: -0.01
-        factorizeDelay: 0.
-
-        StateMeasSyncUpperBound: 0.01
-        StateMeasSyncLowerBound: -0.01
-
-        fixedVelVar: 0.25
-        velVarScale: 1.
-        velVarVector: [ 0.1, 0.1, 99999. ]
-
-        velocityFrame: "body"   # enu, ned, body, ecef
-        velocityType: "2d"       # x, y, z, 2d, 3d
-        noiseModelVelocity: "Cauchy"
-        robustParamVel: 0.5
-
       LIOIntegrator:
         notIntegrating: true
         integratorPlugin: "LIOIntegrator"
+        sensorName: "lidar"
         pointCloudTopic: "/velodyne_points"
         lidarFrame: "velodyne"
         baselinkFrame: "base_link"

@@ -30,7 +30,7 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
 #include "utils/NavigationTools.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 //#include "include/factor/GenericTypes.h"
 

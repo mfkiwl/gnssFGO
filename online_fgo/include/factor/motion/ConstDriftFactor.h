@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -25,7 +25,7 @@
 #include <gtsam/geometry/Pose2.h>
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/base/numericalDerivative.h>
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 
@@ -60,7 +60,7 @@ namespace fgo::factor {
     [[nodiscard]] gtsam::Vector evaluateError(const gtsam::Vector2 &cbd1, const gtsam::Vector2 &cbd2,
                                               boost::optional<gtsam::Matrix &> H1 = boost::none,
                                               boost::optional<gtsam::Matrix &> H2 = boost::none) const override {
-      if (useAutoDiff_) {
+      if (0 && useAutoDiff_) {
         if (H1) {
           *H1 = gtsam::numericalDerivative11<gtsam::Vector2, gtsam::Vector2>(
             boost::bind(&This::evaluateError_, this, boost::placeholders::_1, cbd2), cbd1);

@@ -13,33 +13,35 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-#  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+#  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 #          Jiandong Chen (jiandong.chen@rwth-aachen.de)
 
 set(ONLINEFGO_OFFLINEPRPCESS_NAME
-    ${ONLINEFGO_PREFIX}_offline_process
+        ${ONLINEFGO_PREFIX}_offline_process
 )
 add_library(${ONLINEFGO_OFFLINEPRPCESS_NAME}
-    SHARED
-    LearningGP.cpp
-    OfflineFGOBase.cpp
-    # OfflineTimeCentric.cpp
+        SHARED
+        LearningGP.cpp
+        OfflineFGOBase.cpp
+        OfflineVisualFGO.cpp
+        OfflineSteinLOFGO.cpp
+
 )
 target_include_directories(${ONLINEFGO_OFFLINEPRPCESS_NAME}
-    PUBLIC
-    ${ONLINEFGO_INCLUDE}
+        PUBLIC
+        ${ONLINEFGO_INCLUDE}
 )
 target_link_libraries(${ONLINEFGO_OFFLINEPRPCESS_NAME}
-    PUBLIC
-    ${ONLINEFGO_LINK}
-    ${ONLINEFGO_BUILD_TARGET}
+        PUBLIC
+        ${ONLINEFGO_LINK}
+        ${ONLINEFGO_BUILD_TARGET}
 )
 ament_target_dependencies(${ONLINEFGO_OFFLINEPRPCESS_NAME}
-    PUBLIC
-    ${ONLINEFGO_ROS_DEP}
+        PUBLIC
+        ${ONLINEFGO_ROS_DEP}
 )
 set(ONLINEFGO_BUILD_TARGET
-    ${ONLINEFGO_BUILD_TARGET}
-    ${ONLINEFGO_OFFLINEPRPCESS_NAME}
-    PARENT_SCOPE
+        ${ONLINEFGO_BUILD_TARGET}
+        ${ONLINEFGO_OFFLINEPRPCESS_NAME}
+        PARENT_SCOPE
 )

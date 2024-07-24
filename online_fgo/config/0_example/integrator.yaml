@@ -1,5 +1,5 @@
 ---
-/offline_fgo/learning_gp:
+/deutschland/online_fgo:
   ros__parameters:
     GNSSFGO:
       IntegratorBase:

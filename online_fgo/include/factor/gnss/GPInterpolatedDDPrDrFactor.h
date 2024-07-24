@@ -20,7 +20,7 @@
 #define ONLINE_FGO_GPINTERPODDPRFACTORO_H
 
 #include "model/gp_interpolator/GPInterpolatorBase.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
 * Keys: pose of time i&j X(i)&X(j), velocity of time i&j V(i)&V(j)
@@ -85,7 +85,7 @@ namespace fgo::factor {
       velSatI_(velSatI), pointBase_(pointBase), GPbase_(interpolator) {
       dDPseuRa_ = (PseuRaMR - PseuRaMB) - (PseuRaIR - PseuRaIB);
       ddDRange_ = (dRangeMR - dRangeMB) - (dRangeIR - dRangeIB);
-      factorTypeID_ = FactorTypeID::GPDDPRDR;
+      factorTypeID_ = FactorTypeID::DDPRDR;
       factorName_ = "GPInterpolatedDDPrDrFactor";
     }
 

@@ -34,9 +34,9 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
 
-#include "model/gp_interpolator/GPWNOAInterpolator.h"
+#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
 #include "utils/NavigationTools.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
   class GPSFactor : public gtsam::NoiseModelFactor1<gtsam::Pose3> {

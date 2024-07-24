@@ -22,41 +22,40 @@
 
 #include <any>
 #include "graph/GraphBase.h"
-#include "data/DataTypes.h"
-#include "integrator/GNSSTCIntegrator.h"
-#include "integrator/GNSSLCIntegrator.h"
 #include "integrator/LIOIntegrator.h"
 
-namespace fgo::graph {
-  class GraphTimeCentric : public GraphBase//,  std::enable_shared_from_this<GraphTimeCentric>
-  {
-    GraphTimeCentricParamPtr paramPtr_;
-    rclcpp::Publisher<irt_nav_msgs::msg::SensorProcessingReport>::SharedPtr pubIMUFactorReport_;
+namespace fgo::graph
+{
+    class GraphTimeCentric : public GraphBase//,  std::enable_shared_from_this<GraphTimeCentric>
+    {
+        GraphTimeCentricParamPtr paramPtr_;
+        rclcpp::Publisher<irt_nav_msgs::msg::SensorProcessingReport>::SharedPtr pubIMUFactorReport_;
 
-  public:
-    typedef std::shared_ptr<GraphTimeCentric> Ptr;
+    public:
+        typedef std::shared_ptr<GraphTimeCentric> Ptr;
 
-    explicit GraphTimeCentric(gnss_fgo::GNSSFGOLocalizationBase &node);
+        explicit GraphTimeCentric(gnss_fgo::GNSSFGOLocalizationBase& node);
 
-    ~GraphTimeCentric() override {
-      if (pubResidualsThread_)
-        pubResidualsThread_->join();
+        ~GraphTimeCentric() override
+        {
+            if(pubResidualsThread_)
+            pubResidualsThread_->join();
+        };
+
+        StatusGraphConstruction constructFactorGraphOnIMU(
+            std::vector<fgo::data::IMUMeasurement>& dataIMU
+        ) override;
+
+        StatusGraphConstruction constructFactorGraphOnTime(
+            const std::vector<double>& stateTimestamps,
+            std::vector<fgo::data::IMUMeasurement> &dataIMU
+        ) override;
+
+
+        double optimize(fgo::data::State& new_state) override;
     };
-
-    StatusGraphConstruction constructFactorGraphOnIMU(
-      std::vector<fgo::data::IMUMeasurement> &dataIMU
-    ) override;
-
-    // ToDo: @haoming: remove the dataIMU from parameter list
-    StatusGraphConstruction constructFactorGraphOnTime(
-      const std::vector<double> &stateTimestamps,
-      std::vector<fgo::data::IMUMeasurement> &dataIMU
-    ) override;
-
-
-    double optimize(fgo::data::State &new_state) override;
-  };
 }
+
 
 
 #endif //ONLINE_FGO_GRAPHTIMECENTRIC_H

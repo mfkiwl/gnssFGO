@@ -6,9 +6,11 @@
         StateSensorSyncTimeThreshold: 0.03
         IMUSensorSyncTimeThreshold: 0.02
 
-      BoreasLCIntegrator:
+      BoreasGNSSLCIntegrator:
+        notIntegrating: false
         integratorPlugin: "GNSSLCIntegrator"
-        odomPVATopic: "/boreas/gps_raw"
+        sensorName: "gps"
+        odomPVATopic: "/boreas/gps_gt"
         useForInitialization: true
         useHeaderTimestamp: true
         GNSSMeasurementFrequency: 200
@@ -31,7 +33,7 @@
         MsgSyncLowerBound: 50000000
 
         fixedVelVar: 0.5
-        posVarScale: 20.
+        posVarScale: 1.
         velVarScale: 5.
         headingVarScale: 1.
         headingOffsetDeg: 0.
@@ -50,6 +52,7 @@
       LIOIntegrator:
         notIntegrating: false
         integratorPlugin: "LIOIntegrator"
+        sensorName: "lidar"
         pointCloudTopic: "/boreas/velodyne_points"
         lidarFrame: "velodyne"
         baselinkFrame: "base_link"

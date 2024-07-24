@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -29,17 +29,24 @@
 namespace fgo::dataset {
   using namespace fgo::data;
 
+  struct DELocoBatch : DataBatch
+  {
+    std::vector<GNSSMeasurement> gnss_obs_novatel;
+  };
+
   struct DatasetDELoco : DatasetBase<PVASolution> {
     DataBlock<GNSSMeasurement> data_gnss;
+
     integrator::param::IntegratorGNSSTCParamsPtr gnss_param_ptr;
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr pub_pvt_;
 
     explicit DatasetDELoco(
         rclcpp::Node &node,
         const std::shared_ptr<DatasetParam> &param,
-        integrator::param::IntegratorGNSSTCParamsPtr gnss_param)
-        : DatasetBase("DELoco", param),
-          data_gnss("GNSS", 0., GNSSDataTimeGetter),
+        integrator::param::IntegratorGNSSTCParamsPtr gnss_param,
+        fgo::sensor::SensorCalibrationManager::Ptr sensor_calib_manager)
+        : DatasetBase("DELoco", param, sensor_calib_manager, "/imu/data", "/irt_gnss_preprocessing/PVA"),
+          data_gnss("gnss", "/irt_gnss_preprocessing/gnss_obs_preprocessed", 0., GNSSDataTimeGetter),
           gnss_param_ptr(gnss_param) {
       RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": preparing dataset ...");
       pub_pvt_ = node.create_publisher<sensor_msgs::msg::NavSatFix>("/gt_nav_fix",
@@ -70,28 +77,30 @@ namespace fgo::dataset {
       data_imu.setData(imu_map, true);
       RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": parsed IMU data ...");
 
+      const auto transReferenceFromBase = sensor_calib_manager_->getTransformationFromBase("reference");
+
       const auto raw_pva_msg = readROSMessages<irt_nav_msgs::msg::PVAGeodetic>("/irt_gnss_preprocessing/PVA");
       DataBlock<PVASolution>::DataMap gps_map;
       DataBlock<State>::DataMap gt_state_map;
       for (const auto &time_msg_pair: raw_pva_msg) {
-        auto [pva, state] = sensor::GNSS::parseIRTPVAMsg(time_msg_pair.second, gnss_param_ptr);
+        auto [pva, state] = sensor::gnss::parseIRTPVAMsg(time_msg_pair.second, gnss_param_ptr, transReferenceFromBase.translation());
         gps_map.insert(std::make_pair(time_msg_pair.first, pva));
         gt_state_map.insert(std::make_pair(time_msg_pair.first, state));
       }
       data_reference_state.setData(gt_state_map, true);
       data_reference.setData(gps_map, true);
       RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                         "OfflineFGO Dataset " << name << ": parsed GNSS PVA data ...");
+                         "OfflineFGO Dataset " << name << ": parsed gnss PVA data ...");
 
       const auto raw_gnss = readROSMessages<irt_nav_msgs::msg::GNSSObsPreProcessed>(
           "/irt_gnss_preprocessing/gnss_obs_preprocessed");
       DataBlock<GNSSMeasurement>::DataMap gnss_map;
       for (const auto &time_msg_pair: raw_gnss) {
         gnss_map.insert(std::make_pair(time_msg_pair.first,
-                                       sensor::GNSS::convertGNSSObservationMsg(time_msg_pair.second, gnss_param_ptr)));
+                                       sensor::gnss::convertGNSSObservationMsg(time_msg_pair.second, gnss_param_ptr)));
       }
       data_gnss.setData(gnss_map, true);
-      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": parsed GNSS data ...");
+      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": parsed gnss data ...");
       setTimestampsFromReference();
       trimDataBlocks();
     }
@@ -108,20 +117,33 @@ namespace fgo::dataset {
     }
 
     data::State referenceToState(const PVASolution &reference) override {
-      return sensor::GNSS::PVASolutionToState(reference, gnss_param_ptr->transIMUToAnt1);
+      static const auto transReferenceFromBase = sensor_calib_manager_->getTransformationFromBase("reference");
+      return sensor::gnss::PVASolutionToState(reference, transReferenceFromBase.translation());
     }
 
-    GNSSMeasurement getNextGNSSObservation() { return data_gnss.getNextData(); }
-
-    std::vector<GNSSMeasurement>
-    getGNSSObservationBetween(rclcpp::Time &lastOptStateTime, const rclcpp::Time &currentOptStateTime) {
-      return data_gnss.getDataBetween(lastOptStateTime, currentOptStateTime);
+    DELocoBatch getDataBefore(double timestamp,
+                                  bool erase = false) {
+      DELocoBatch batch;
+      batch.timestamp_end = timestamp;
+      const auto ros_timestamp = utils::secondsToROSTime(timestamp);
+      batch.imu = data_imu.getDataBefore(ros_timestamp, erase);
+      batch.reference_pva = data_reference.getDataBefore(ros_timestamp, erase);
+      batch.reference_state = data_reference_state.getDataBefore(ros_timestamp, erase);
+      batch.gnss_obs_novatel = data_gnss.getDataBefore(ros_timestamp, erase);
+      return batch;
     }
 
-    std::vector<GNSSMeasurement>
-    getGNSSObservationBefore(double timestamp,
-                             bool erase = false) {
-      return data_gnss.getDataBefore(rclcpp::Time(timestamp * 1e9, RCL_ROS_TIME), erase);
+    DELocoBatch getDataBetween(double timestamp_start,
+                                   double timestamp_end) {
+      DELocoBatch batch;
+      batch.timestamp_end = timestamp_end;
+      const auto ros_timestamp_start = utils::secondsToROSTime(timestamp_start);
+      const auto ros_timestamp_end = utils::secondsToROSTime(timestamp_end);
+      batch.imu = data_imu.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      batch.reference_pva = data_reference.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      batch.reference_state = data_reference_state.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      batch.gnss_obs_novatel = data_gnss.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      return batch;
     }
   };
 }

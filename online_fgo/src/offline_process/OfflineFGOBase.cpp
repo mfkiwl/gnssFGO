@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Haoming Zhang (h.zhang@irt.rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
@@ -110,6 +110,7 @@ namespace offline_process {
     currentIMUPreintegrator_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(preIntegratorParams_,
                                                                                           lastOptimizedState_.imuBias);
 
+    const auto transReferenceFromBase = sensorCalibManager_->getTransformationFromBase("reference");
     graph_->initGraph(lastOptimizedState_, lastOptimizedState_.timestamp.seconds(), preIntegratorParams_);
     currentPredState_ = lastOptimizedState_;
     //add first state time
@@ -118,7 +119,7 @@ namespace offline_process {
     //publish
     fgoStateOptPub_->publish(this->convertFGOStateToMsg(lastOptimizedState_));
     fgoStateOptNavFixPub_->publish(
-      this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp, true));
+      this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp, transReferenceFromBase.translation()));
 
     // for an offline process, we firstly generate a state ids and timestamps map
 
@@ -146,19 +147,19 @@ namespace offline_process {
       state_id_timestamp_map.insert(std::make_pair(i, time_start + i * time_offset_state));
     }
     // as the last measurement may be in between of two state variables, we compare the last state_id_timestamp
-    if (time_end < state_id_timestamp_map.end()->second)
-      state_id_timestamp_map.insert(std::make_pair(state_id_timestamp_map.end()->first + 1, time_start +
-                                                                                            (state_id_timestamp_map.end()->first +
-                                                                                             1) * time_offset_state));
+    const auto last_state_id_timestamp_pair = --state_id_timestamp_map.end();
+    if (time_end < last_state_id_timestamp_pair->second)
+      state_id_timestamp_map.insert(std::make_pair((--state_id_timestamp_map.end())->first + 1, time_start +
+                                                                                            (last_state_id_timestamp_pair->first + 1) * time_offset_state));
 
     RCLCPP_INFO_STREAM(this->get_logger(),
                        "OfflineFGO: State ID/Timestamp Map: totally " << state_id_timestamp_map.size()
                                                                       << " states. Time start: "
-                                                                      << time_start
+                                                                      << std::fixed << time_start
                                                                       << "s. Measurement time_end: "
                                                                       << time_end
                                                                       << "s. State time_end: "
-                                                                      << state_id_timestamp_map.end()->second);
+                                                                      << last_state_id_timestamp_pair->second);
 
     // To control the FGO process, we then plan the optimization and states based on state_num and opt_num
     opt_states_map_.clear();
@@ -168,7 +169,7 @@ namespace offline_process {
       std::vector<std::pair<size_t, double>> state_id_timestamps;
       size_t state_budget = state_num_every_opt;
       do {
-        state_id_timestamps.emplace_back(std::make_pair(state_iter->first, state_iter->second));
+        state_id_timestamps.emplace_back(state_iter->first, state_iter->second);
         state_iter++;
         state_budget--;
       } while (state_budget > 0);
@@ -289,10 +290,16 @@ namespace offline_process {
   }
 
   void OfflineFGOBase::propagate_imu(const std::vector<fgo::data::IMUMeasurement> &imus) {
+    static const auto transReferenceFromBase = sensorCalibManager_->getTransformationFromBase("reference");
+
     gtsam::Vector3 gravity_b = gtsam::Vector3::Zero();
     if (paramsPtr_->calibGravity) {
       const auto gravity = fgo::utils::gravity_ecef(currentPredState_.state.position());
       gravity_b = currentPredState_.state.attitude().unrotate(gravity);
+    }
+    else
+    {
+      std::cout << "NOT CALCULATING GRAVITY" << std::endl;
     }
 
     for (const auto &imu_meas: imus) {
@@ -321,15 +328,16 @@ namespace offline_process {
       //currentPredState_.mutex.unlock();
       graph_->updatePredictedBuffer(currentPredState_);
       fgoPredStateBuffer_.update_buffer(currentPredState_, imu_meas.timestamp, this->get_clock()->now());
+      const auto navfixMsgRef = convertPositionToNavFixMsg(currentPredState_.state, currentPredState_.timestamp, transReferenceFromBase.translation());
       const auto FGOStateMsg = this->convertFGOStateToMsg(currentPredState_);
-      fgo::data::UserEstimation_T userEstimation = {FGOStateMsg.llh_ant_main[0], FGOStateMsg.llh_ant_main[1],
-                                                    FGOStateMsg.llh_ant_main[2], FGOStateMsg.cbd[0],
-                                                    FGOStateMsg.llh_ant_aux[0], FGOStateMsg.llh_ant_aux[1],
-                                                    FGOStateMsg.llh_ant_aux[2]};
+      const std::array<double, 2> llh_rad = {navfixMsgRef.latitude * fgo::constants::deg2rad, navfixMsgRef.longitude * fgo::constants::deg2rad};
+      fgo::data::UserEstimation_T userEstimation = {llh_rad[0], llh_rad[1],
+                                                    navfixMsgRef.altitude, FGOStateMsg.cbd[0],
+                                                    0., 0., 0.};
       fgoStatePredPub_->publish(FGOStateMsg);
 
       userEstimationBuffer_.update_buffer(userEstimation, imu_meas.timestamp);
-      fgoStatePredNavFixPub_->publish(convertPositionToNavFixMsg(FGOStateMsg, true));
+      fgoStatePredNavFixPub_->publish(navfixMsgRef);
 
       if (this->isStateInited_ && !paramsPtr_->calcErrorOnOpt) {
         calculateErrorOnState(currentPredState_);

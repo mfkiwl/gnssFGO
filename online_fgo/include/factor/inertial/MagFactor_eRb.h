@@ -45,7 +45,7 @@
 #include <gtsam/base/numericalDerivative.h>
 
 #include "utils/NavigationTools.h"
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo {
   namespace factor {
@@ -69,15 +69,15 @@ namespace fgo {
       /** Constructor */
       MagFactor_eRb(gtsam::Key pose_i, const gtsam::Vector3 &measured_b, const gtsam::Vector3 &expected_ecef,
                     const gtsam::Vector3 &bias, const gtsam::SharedNoiseModel &model) :
-        NoiseModelFactor1<gtsam::Pose3>(model, pose_i), //
-        measuredb_(measured_b / measured_b.norm()), magField_ecef(expected_ecef / expected_ecef.norm()),
-        bias_(bias) {
+              NoiseModelFactor1<gtsam::Pose3>(model, pose_i), //
+              measuredb_(measured_b / measured_b.norm()), magField_ecef(expected_ecef / expected_ecef.norm()),
+              bias_(bias) {
       }
 
       /// @return a deep copy of this factor
       NonlinearFactor::shared_ptr clone() const override {
         return boost::static_pointer_cast<NonlinearFactor>(
-          NonlinearFactor::shared_ptr(new MagFactor_eRb(*this)));
+                NonlinearFactor::shared_ptr(new MagFactor_eRb(*this)));
       }
 
       /**
@@ -89,7 +89,7 @@ namespace fgo {
 #if AUTO_DIFF
         if (H)
           *H = gtsam::numericalDerivative11<gtsam::Vector3, gtsam::Pose3>(
-            boost::bind(&This::evaluateError_, this, boost::placeholders::_1), pose);
+                  boost::bind(&This::evaluateError_, this, boost::placeholders::_1), pose);
         return evaluateError_(pose);
 #else
         const gtsam::Rot3 Rb2e = pose.rotation();
@@ -109,28 +109,6 @@ namespace fgo {
         gtsam::Point3 hx = eRb.transpose() * magField_ecef;
         gtsam::Vector3 error = hx - bias_ - measuredb_;
         return error;
-      }
-
-      /** lifting all related state values in a vector after the ordering for evaluateError **/
-      gtsam::Vector liftValuesAsVector(const gtsam::Values &values) override {
-        const auto pose = values.at<gtsam::Pose3>(key());
-        const auto liftedStates = (gtsam::Vector(6) << pose.rotation().rpy(),
-          pose.translation()).finished();
-        return liftedStates;
-      }
-
-      gtsam::Values generateValuesFromStateVector(const gtsam::Vector &state) override {
-        assert(state.size() != 6);
-        gtsam::Values values;
-        try {
-          values.insert(key(), gtsam::Pose3(gtsam::Rot3::RzRyRx(state.block<3, 1>(0, 0)),
-                                            gtsam::Point3(state.block<3, 1>(3, 0))));
-        }
-        catch (std::exception &ex) {
-          std::cout << "Factor " << getName() << " cannot generate values from state vector " << state << " due to "
-                    << ex.what() << std::endl;
-        }
-        return values;
       }
 
       /** return the measured */

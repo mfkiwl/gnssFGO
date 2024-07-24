@@ -73,7 +73,9 @@ namespace fgo::integrator {
                                                                        callbackGroupMap_["LIOSAMLoop"],
                                                                        callbackGroupMap_["LIOSAMVisualization"],
                                                                        integratorName_,
-                                                                       pubSensorReport_);
+                                                                       pubSensorReport_,
+                                                                       sensorCalibManager_->getTransformationFromBase(
+                                                                         sensorName_));
 
     if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOJ) {
       interpolatorI_ = std::make_shared<fgo::models::GPWNOJInterpolator>(
@@ -83,10 +85,10 @@ namespace fgo::integrator {
         gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
         integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
     } else if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
+      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
         gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
         integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
-      interpolatorJ_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
+      interpolatorJ_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
         gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
         integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
     } else {
@@ -259,7 +261,7 @@ namespace fgo::integrator {
             if (!integratorParamPtr_->notIntegrating) {
               RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "LIOSAM: Integrating BETWEEN Factor.");
               if (integratorParamPtr_->integrateBetweenPose) {
-                auto betweenFactor = boost::make_shared<fgo::factor::BetweenPose3Factor>(
+                auto betweenFactor = boost::make_shared<fgo::factor::BetweenFactor<gtsam::Pose3>>(
                   X(odom.queryOutputPrevious.keyIndexI),
                   X(odom.queryOutputCurrent.keyIndexI),
                   odom.poseRelativeECEF, noise_model);
@@ -335,9 +337,10 @@ namespace fgo::integrator {
                                                          integratorBaseParamPtr_->robustParamOdomPose,
                                                          "odomBetweenFactor");
 
-        auto betweenFactor = boost::make_shared<fgo::factor::BetweenPose3Factor>(X(nState_ - 1),
-                                                                                 X(nState_),
-                                                                                 odom.poseRelativeECEF, noise_model);
+        auto betweenFactor = boost::make_shared<fgo::factor::BetweenFactor<gtsam::Pose3>>(X(nState_ - 1),
+                                                                                          X(nState_),
+                                                                                          odom.poseRelativeECEF,
+                                                                                          noise_model);
         betweenFactor->setTypeID(fgo::factor::FactorTypeID::BetweenPose);
         betweenFactor->setName("LiDARBetweenFactor");
         graphPtr_->push_back(betweenFactor);

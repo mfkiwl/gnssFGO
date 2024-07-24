@@ -20,7 +20,7 @@
 #pragma once
 
 #include <string>
-#include "data/DataTypes.h"
+#include "data/DataTypesFGO.h"
 
 namespace gnss_fgo {
   struct GNSSFGOParams {
@@ -30,8 +30,6 @@ namespace gnss_fgo {
     int optFrequency = 10; // 10 Hz
     int stateFrequency = 10;
     int bufferSize = 100;
-
-    bool addIMUFactor = true;
 
     bool calibGravity = true;
     bool calcErrorOnOpt = false;
@@ -49,25 +47,25 @@ namespace gnss_fgo {
 
     bool addGPPriorFactor = false;
     bool addGPInterpolatedFactor = false;
-    fgo::data::GPModelType gpType = fgo::data::GPModelType::Singer;
+    fgo::data::GPModelType gpType = fgo::data::GPModelType::WNOA;
     bool fullGPPrior = false;
 
-    gtsam::Point3 transIMUToCorrevit = gtsam::Point3(0, 0, 0);
-    gtsam::Point3 transIMUToReference = gtsam::Point3(0, 0, 0);
+    //gtsam::Point3 transIMUToCorrevit = gtsam::Point3(0, 0, 0);
+    //gtsam::Point3 transIMUToReference = gtsam::Point3(0, 0, 0);
 
-    gtsam::Rot3 rotIMUToReference = gtsam::Rot3();
-    gtsam::Point3 transIMUToAnt1 = gtsam::Point3(0, 0, 0);  // lever arm between imu and phase center of main antenna
-    gtsam::Point3 transIMUToAnt2 = gtsam::Point3(0, 0, 0);
-    gtsam::Point3 transIMUToLiDAR = gtsam::Point3(0.339560, 0, -0.0787);
-    gtsam::Rot3 rotIMUtoLiDAR = gtsam::Rot3::Roll(-M_PI);
+    //gtsam::Rot3 rotIMUToReference = gtsam::Rot3();
+    //gtsam::Point3 transIMUToAnt1 = gtsam::Point3(0, 0, 0);  // lever arm between imu and phase center of main antenna
+    //gtsam::Point3 transIMUToAnt2 = gtsam::Point3(0, 0, 0);
+    //gtsam::Point3 transIMUToLiDAR = gtsam::Point3(0.339560, 0, -0.0787);
+    //gtsam::Rot3 rotIMUtoLiDAR = gtsam::Rot3::Roll(-M_PI);
 
     bool UsePPSTimeSync = true;
 
     // Initializer
     bool initGyroBiasAsZero = true;
-    bool cleanIMUOnInit = true;
+    bool cleanIMUonInit = true;
     bool useHeaderTimestamp = true;
-    gtsam::Rot3 imuRot = gtsam::Rot3::Identity();
+    //gtsam::Rot3 imuRot = gtsam::Rot3::Identity();
 
     // publisher
     //bool pubNavFixAntMain = true;

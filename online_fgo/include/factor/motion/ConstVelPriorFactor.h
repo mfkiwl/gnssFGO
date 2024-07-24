@@ -26,7 +26,7 @@
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/navigation/NavState.h>
 #include <gtsam/base/numericalDerivative.h>
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 namespace fgo::factor {
 
@@ -64,21 +64,21 @@ namespace fgo::factor {
                                               boost::optional<gtsam::Matrix &> H4 = boost::none) const override {
 #if AUTO_DIFF
       if (H1)
-        *H1 = gtsam::numericalDerivative11<gtsam::Vector6, gtsam::Pose3>(
-          boost::bind(&This::evaluateError_, this, boost::placeholders::_1, v1, x2, v2), x1);
+        *H1 = gtsam::numericalDerivative11<gtsam::Vector6,gtsam::Pose3>(
+                boost::bind(&This::evaluateError_, this, boost::placeholders::_1, v1, x2, v2), x1);
       if (H2)
-        *H2 = gtsam::numericalDerivative11<gtsam::Vector6, gtsam::Vector3>(
-          boost::bind(&This::evaluateError_, this, x1, boost::placeholders::_1, x2, v2), v1);
+        *H2 = gtsam::numericalDerivative11<gtsam::Vector6,gtsam::Vector3>(
+                boost::bind(&This::evaluateError_, this, x1, boost::placeholders::_1, x2, v2), v1);
       if (H3)
-        *H3 = gtsam::numericalDerivative11<gtsam::Vector6, gtsam::Pose3>(
-          boost::bind(&This::evaluateError_, this, x1, v1, boost::placeholders::_1, v2), x2);
+        *H3 = gtsam::numericalDerivative11<gtsam::Vector6,gtsam::Pose3>(
+                boost::bind(&This::evaluateError_, this, x1, v1, boost::placeholders::_1, v2), x2);
       if (H4)
-        *H4 = gtsam::numericalDerivative11<gtsam::Vector6, gtsam::Vector3>(
-          boost::bind(&This::evaluateError_, this, x1, v1, x2, boost::placeholders::_1), v2);
+        *H4 = gtsam::numericalDerivative11<gtsam::Vector6,gtsam::Vector3>(
+                boost::bind(&This::evaluateError_, this, x1, v1, x2, boost::placeholders::_1), v2);
       return evaluateError_(x1, v1, x2, v2);
 #else
       if (H1) { (*H1) = (gtsam::Matrix66() << gtsam::Z_3x3, -gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3).finished(); }
-      if (H2) { (*H2) = (gtsam::Matrix63() << - gtsam::I_3x3 * deltatime_, -gtsam::I_3x3).finished(); }
+      if (H2) { (*H2) = (gtsam::Matrix63() << -gtsam::I_3x3 * deltatime_, -gtsam::I_3x3).finished(); }
       if (H3) { (*H3) = (gtsam::Matrix66() << gtsam::Z_3x3, gtsam::I_3x3, gtsam::Z_3x3, gtsam::Z_3x3).finished(); }
       if (H4) { (*H4) = (gtsam::Matrix63() << gtsam::Z_3x3, gtsam::I_3x3).finished(); }
       return (gtsam::Vector6() << (x2.translation() - x1.translation() - v1 * deltatime_, v2 - v1)).finished();

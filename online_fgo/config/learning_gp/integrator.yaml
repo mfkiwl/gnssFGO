@@ -6,49 +6,9 @@
         StateSensorSyncTimeThreshold: 0.01
         IMUSensorSyncTimeThreshold: 0.01
 
-      IRTPVALCIntegrator:
+      BoreasGNSSLCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
-        notIntegrating: true
-        useForInitialization: true
-        useHeaderTimestamp: true
-        GNSSMeasurementFrequency: 10
-        PVTSource: "irt"
-        hasHeading: true
-        hasPitch: false
-        hasRoll: false
-        integrateAttitude: true
-        integrateVelocity: false
-        onlyRTKFixed: false
-
-        zeroVelocityThreshold: 0.06
-        varScaleRTKFloat: 5.
-        varScaleSingle: 10.
-        varScaleHeadingSingle: 5.
-        varScaleHeadingRTKFloat: 2.
-        varScaleNoSolution: 1000.
-
-        solutionSyncQueueSize: 10
-        MsgSyncLowerBound: 50000000
-
-        fixedVelVar: 0.5
-        posVarScale: 1.
-        velVarScale: 5.
-        headingVarScale: 2.
-        headingOffsetDeg: 0.
-
-        attitudeFrame: "ned"
-        attitudeType: "yaw"
-        velocityFrame: "ned"
-        velocityType: "3d"
-        noiseModelAttitude: "cauchy"
-        noiseModelVelocity: "cauchy"
-        noiseModelPosition: "cauchy"
-        robustParamPos: 0.5
-        robustParamVel: 0.5
-        robustParamAtt: 0.5
-
-      BoreasLCIntegrator:
-        integratorPlugin: "GNSSLCIntegrator"
+        sensorName: "gnss"
         notIntegrating: false
         odomPVATopic: "/boreas/gps_raw"
         useForInitialization: true
@@ -73,7 +33,7 @@
         MsgSyncLowerBound: 50000000
 
         fixedVelVar: 0.5
-        posVarScale: 20.
+        posVarScale: 0.01
         velVarScale: 5.
         headingVarScale: 1.
         headingOffsetDeg: 0.
@@ -91,6 +51,7 @@
 
       LIOIntegrator:
         notIntegrating: false
+        sensorName: "lidar"
         integratorPlugin: "LIOIntegrator"
         pointCloudTopic: "/velodyne_points"
         lidarFrame: "velodyne"

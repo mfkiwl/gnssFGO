@@ -8,6 +8,7 @@
 
       IRTPVALCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
+        sensorName: "reference"
         notIntegrating: true
         useForInitialization: true
         useHeaderTimestamp: true
@@ -49,6 +50,7 @@
 
       UbloxLCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
+        sensorName: "ublox_ant_main"
         notIntegrating: false
         useForInitialization: false
         useHeaderTimestamp: true
@@ -92,6 +94,7 @@
 
       CorrevitIntegrator:
         integratorPlugin: "CorrevitIntegrator"
+        sensorName: "correvit"
         integrateVelocity: false
         enablePreIntegration: false
         velocitySigma: 0.1
@@ -120,6 +123,7 @@
       LIOIntegrator:
         notIntegrating: false
         integratorPlugin: "LIOIntegrator"
+        sensorName: "vlp16"
         pointCloudTopic: "/velodyne_points"
         lidarFrame: "velodyne"
         baselinkFrame: "base_link"

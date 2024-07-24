@@ -32,7 +32,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
-#include "factor/FactorTypeIDs.h"
+#include "factor/FactorTypeID.h"
 
 /*Inputs:
 * Keys: pose of time i X(i)
@@ -265,7 +265,6 @@ namespace fgo {
       }
 
       /** return the measured */
-
       [[nodiscard]] double measured() const {
         return ddPseuRa_;
       }
