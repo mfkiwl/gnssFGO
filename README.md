@@ -32,8 +32,7 @@ The goal of this framework is to build a fundamental time-centric graph-optimiza
  5. etc.
 2. advanced inference for e.g., online sensor noise identification and hyper-parameter tuning (onging works)
 
-### Currently, only ROS2 is supported, the ROS1 version is in development.
-### Call for collaborations, contact: h.zhang@irt.rwth-aaachen.de
+### Call for collaborations, contact: haoming.zhang@rwth-aachen.de
 ---
 
 ## Dependencies (mostly as submodules):
