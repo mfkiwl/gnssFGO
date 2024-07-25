@@ -33,7 +33,7 @@
 #include <gtsam/geometry/Point3.h>
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
-#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "model/gp_interpolator/GPInterpolatorBase.h"
 #include "utils/NavigationTools.h"
 #include "factor/FactorTypeID.h"
 

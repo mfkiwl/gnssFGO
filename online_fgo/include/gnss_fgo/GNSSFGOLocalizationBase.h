@@ -187,14 +187,14 @@ namespace gnss_fgo
 
         /***
          * this function contains the endless loop for time-centric graph construction and optimization
-         * this is an alternative of onTriggerOptimization. Only one of these functions will be called in the optThread_
+         * this is an alternative of timeCentricFGOonIMU. Only one of these functions will be called in the optThread_
          */
         void timeCentricFGO();
 
         /***
          * Trigger Optimization if the imu is used as the timing reference
          */
-        void onTriggerOptimization();
+        void timeCentricFGOonIMU();
 
         /***
          * Update the graph after graph construction
@@ -210,7 +210,7 @@ namespace gnss_fgo
         virtual void calculateErrorOnState(const fgo::data::State& stateIn);
 
         /***
-         * bypass the conditional waiting in onTriggerOptimization(), if the imu is used as the timing reference
+         * bypass the conditional waiting in timeCentricFGOonIMU(), if the imu is used as the timing reference
          */
         void notifyOptimization()
         {

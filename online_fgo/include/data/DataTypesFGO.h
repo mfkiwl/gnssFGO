@@ -46,7 +46,9 @@ namespace fgo::data {
   enum GPModelType {
     WNOA,
     WNOJ,
-    Singer
+    WNOJFull,
+    Singer,
+    SingerFull,
   };
 
   struct Pose {

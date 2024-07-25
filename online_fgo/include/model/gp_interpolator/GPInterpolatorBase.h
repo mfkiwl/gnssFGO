@@ -66,6 +66,12 @@ namespace fgo::models {
       delta_t_ = delta_t;
     }
 
+    void update(double delta_t, double tau, const gtsam::Matrix66 &Ad) {
+      tau_ = tau;
+      delta_t_ = delta_t;
+      Ad_ = Ad;
+    }
+
   public:
 
     [[nodiscard]] virtual double getTau() const {

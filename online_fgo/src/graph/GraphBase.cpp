@@ -16,13 +16,12 @@
 //
 //
 
+#include <algorithm>
 #include "graph/GraphBase.h"
 #include "integrator/IntegratorBase.h"
 #include "gnss_fgo/GNSSFGOLocalizationBase.h"
-
-#include "factor/odometry/NavAttitudeFactor.h"
-#include "factor/odometry/GPInterpolatedNavAttitudeFactor.h"
-
+#include "data/sampling/UncentedSampler.h"
+#include "utils/AlgorithmicUtils.h"
 
 namespace fgo::graph {
   using namespace std::chrono_literals;
@@ -57,7 +56,7 @@ namespace fgo::graph {
       pubResiduals_ = appPtr_->create_publisher<irt_nav_msgs::msg::FactorResiduals>("residuals",
                                                                                     rclcpp::SystemDefaultsQoS());
       pubGTResiduals_ = appPtr_->create_publisher<irt_nav_msgs::msg::FactorResiduals>("GTResiduals",
-                                                                                    rclcpp::SystemDefaultsQoS());
+                                                                                      rclcpp::SystemDefaultsQoS());
       std::vector<std::string> factorSkipped = {};
       RosParameter<std::vector<std::string>> factorSkippedParam("GNSSFGO.Graph.factorSkipped", factorSkipped, node);
 
@@ -193,7 +192,7 @@ namespace fgo::graph {
 
       std::cout << "#################################################################" << std::endl;
 
-    } else {
+    } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
       RosParameter<std::vector<double>> QcGPMotionPriorFull("GNSSFGO.Optimizer.QcGPWNOAMotionPriorFull", node);
       graphBaseParamPtr_->QcGPMotionPriorFull = gtsam::Vector6(QcGPMotionPriorFull.value().data());
       RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPWNOAMotionPrior:" << graphBaseParamPtr_->QcGPMotionPriorFull);
@@ -211,10 +210,27 @@ namespace fgo::graph {
       std::cout << "###" << std::endl;
       qc->print("Q:");
 
-
       std::cout << "#################################################################" << std::endl;
+    } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::Singer) {
+
+      // ToDo @ Zirui, please try to read the Ad matrix for configuration and make a screening here
+      RosParameter<std::vector<double>> QcGPMotionPriorFull("GNSSFGO.Optimizer.QcGPSingerMotionPriorFull", node);
+      graphBaseParamPtr_->QcGPMotionPriorFull = gtsam::Vector6(QcGPMotionPriorFull.value().data());
+      RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPSingerMotionPrior:" << graphBaseParamPtr_->QcGPMotionPriorFull);
+
+      RosParameter<std::vector<double>> QcFull("GNSSFGO.Optimizer.QcGPSingerInterpolatorFull", node);
+      graphBaseParamPtr_->QcGPInterpolatorFull = gtsam::Vector6(QcFull.value().data());
+      RCLCPP_INFO_STREAM(appPtr_->get_logger(), "QcGPSingerInterpolator:" << graphBaseParamPtr_->QcGPInterpolatorFull);
+      gtsam::SharedNoiseModel qcModel = gtsam::noiseModel::Diagonal::Variances(graphBaseParamPtr_->QcGPMotionPriorFull);
+      //auto qc = gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ<6>(fgo::utils::getQc(qcModel), testDt));
+
+     // std::cout << fgo::utils::getQc(qcModel) << std::endl;
+     // std::cout << "###" << std::endl;
+      //qc->print("Q:");
+
     }
 
+    // PARAM: Using automatic differencing or analytical Jacobians
     RosParameter<bool> AutoDiffNormalFactor("GNSSFGO.Graph.AutoDiffNormalFactor", node);
     graphBaseParamPtr_->AutoDiffNormalFactor = AutoDiffNormalFactor.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(),
@@ -240,6 +256,7 @@ namespace fgo::graph {
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "addEstimatedVarianceAfterInit: "
       << (graphBaseParamPtr_->addEstimatedVarianceAfterInit ? "true" : "false"));
 
+    // PARAM: Factors
     RosParameter<bool> addConstDriftFactor("GNSSFGO.Graph.addConstDriftFactor", node);
     graphBaseParamPtr_->addConstDriftFactor = addConstDriftFactor.value();
     RCLCPP_INFO_STREAM(appPtr_->get_logger(),
@@ -367,7 +384,7 @@ namespace fgo::graph {
                       switch (factorTypeID) {
                         case fgo::factor::FactorTypeID::GPWNOAMotionPrior: {
                           sampleResiduals = true;
-                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPWNOAPriorPose3>(factor);
+                          thisFactorCasted = boost::dynamic_pointer_cast<fgo::factor::GPWNOAPrior>(factor);
                           break;
                         }
 
@@ -475,7 +492,7 @@ namespace fgo::graph {
                         }
                       }
 
-                      /*
+
                       if (thisFactorCasted && factorImplemented) {
                         irt_nav_msgs::msg::FactorResidual res;
                         res.current_state_key = maxStateIndex;
@@ -556,7 +573,7 @@ namespace fgo::graph {
                           res.samples.emplace_back(sample);
                         }
                         resMsg.residuals.emplace_back(res);
-                      }*/
+                      }
                     });
       pubResiduals_->publish(resMsg);
     }
@@ -602,15 +619,6 @@ namespace fgo::graph {
 
     currentKeyIndexTimestampMap_.insert(std::make_pair(nState_, initTimestamp));
 
-    //if(LIOParams_.useTDCarrierPhase)
-    //{
-    //auto noise_model = gtsam::noiseModel::Diagonal::Variances(1000 * gtsam::Vector::Ones(40));
-    //this->emplace_shared<gtsam::PriorFactor<gtsam::Vector>>(N(0), gtsam::Vector::Zero(40),
-    //                                                        noise_model);
-    //gtsam::Vector xVec; xVec.resize(40);
-    //values_.insert(N(0), gtsam::Vector::Zero(40));
-    //keyTimestampMap_[N(0)] = initTimestamp;
-    // }
 
     if (graphBaseParamPtr_->addGPPriorFactor || graphBaseParamPtr_->addGPInterpolatedFactor) {
       auto priorOmegaFactor = gtsam::PriorFactor<gtsam::Vector3>(W(0), initState.omega, initState.omegaVar);
@@ -621,10 +629,14 @@ namespace fgo::graph {
       keyTimestampMap_[W(0)] = initTimestamp;
     }
 
-    if (!graphBaseParamPtr_->addGPPriorFactor && graphBaseParamPtr_->addGPInterpolatedFactor) {
-      fgo::data::IMUMeasurement tmpIMU;
-      tmpIMU.gyro = initState.omega;
-      // this->addAngularFactor(W(0), B(0), tmpIMU);
+    if (graphBaseParamPtr_->gpType == WNOJFull || graphBaseParamPtr_->gpType == SingerFull || graphBaseParamPtr_->addConstantAccelerationFactor) {
+      auto priorAccFactor = gtsam::PriorFactor<gtsam::Vector6>(A(0), initState.accMeasured,
+                                                               initState.accVar);
+      priorAccFactor.setTypeID(999);
+      priorAccFactor.setName("priorAccFactor");
+      this->push_back(priorAccFactor);
+      values_.insert(A(0), gtsam::Vector6(initState.accMeasured));
+      keyTimestampMap_[A(0)] = initTimestamp;
     }
 
     for (const auto &integrator: integratorMap_) {

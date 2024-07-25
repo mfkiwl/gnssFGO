@@ -617,7 +617,6 @@ namespace sensors::LiDAR::LIOSAM
           {
             //initialPoseSet = true;
             RCLCPP_ERROR_STREAM(node_.get_logger(), "[LIOSAM]: Received first SCAN at" << std::fixed << timestamp.seconds() << " ON INITIAL POSE");
-
             poseAnchorLocalWorldToECEF_ = poseLiDARECEF;
             poseAnchorECEFToLocalWorld_ = poseLiDARECEF.inverse();
             posAnchorInitECEF_ = poseLiDARECEF.translation();
@@ -795,6 +794,7 @@ namespace sensors::LiDAR::LIOSAM
           node_.get_parameter("OnlineFGO."+ integratorName +".surroundingKeyframeDensity", params_.surroundingKeyframeDensity);
 
           params_.T_lidar_in_IMU = transFromBase;
+          RCLCPP_WARN_STREAM(node_.get_logger(), "Calib parameter: " << transFromBase);
 
           node_.declare_parameter("OnlineFGO.\"+ integratorName +\".maxNumCachedMap", 1000000);
           node_.get_parameter("OnlineFGO.\"+ integratorName +\".maxNumCachedMap", params_.maxNumCachedMap);
@@ -889,7 +889,7 @@ namespace sensors::LiDAR::LIOSAM
                 gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
                 integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
           } else if(integratorParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
-            interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
+            interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
                 gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
                 integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
           } else {
@@ -969,12 +969,15 @@ namespace sensors::LiDAR::LIOSAM
             const auto LiDARPoseECEF = imuPoseI.transformPoseFrom(imuTl);
             //const auto LiDARPoseILocal = IMUPoseILocal.transformPoseFrom(imuTl);
             const auto LiDARPoseILocal = poseAnchorECEFToLocalWorld_.transformPoseFrom(LiDARPoseECEF);
-
+            //const auto imuPoseILocal = poseAnchorECEFToLocalWorld_.transformPoseFrom(imuPoseI);
             this->updateKeyCloudPoseImpl_(scanIndexI, LiDARPoseILocal, cloudKeyPoseIndexTimestampMap_[scanIndexI]);
 
             //RCLCPP_ERROR_STREAM(node_.get_logger(),
-            //                    "-------------- Updating ScanI " << std::fixed << scanIndexI << " with pose: "
-            //                                                     << LiDARPoseILocal);
+            //                    "-------------- Updating ScanI " << std::fixed << scanIndexI << " with pose: " << std::fixed
+           //                                                     << LiDARPoseILocal.translation() << " : " << LiDARPoseILocal.rotation().rpy() * fgo::constants::rad2deg);
+            //RCLCPP_ERROR_STREAM(node_.get_logger(),
+            //                    "-------------- Updating ScanI " << std::fixed << scanIndexI << " with imu pose: " << std::fixed
+            //                                                     << imuPoseILocal.translation() << " : " <<imuPoseILocal.rotation().rpy() * fgo::constants::rad2deg);
           }
 
           //const auto IMUPosJENU = rotInitENU_.rotate(imuPoseJ.translation() - posAnchorInitECEF_);
@@ -985,7 +988,7 @@ namespace sensors::LiDAR::LIOSAM
           const auto LiDARPoseJLocal = poseAnchorECEFToLocalWorld_.transformPoseFrom(LiDARPoseECEF);
 
           this->updateKeyCloudPoseImpl_(scanIndexJ, LiDARPoseJLocal, cloudKeyPoseIndexTimestampMap_[scanIndexJ]);
-          //RCLCPP_ERROR_STREAM(node_.get_logger(), "-------------- Updating ScanJ " << std::fixed << scanIndexJ << " with pose: " << LiDARPoseJLocal);
+         // RCLCPP_ERROR_STREAM(node_.get_logger(), "-------------- Updating ScanJ " << std::fixed << scanIndexJ << " with pose: " << LiDARPoseJLocal);
 
           const auto LiDARPoseEcef = imuPoseJ.transformPoseFrom(imuTl);
           odomInfoMsg_->sensor_ecef_pos_to_optimized.x = LiDARPoseEcef.x();

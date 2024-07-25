@@ -19,7 +19,7 @@
 #ifndef ONLINE_FGO_GPINTERPOLATEDDDPRFACTORO_H
 #define ONLINE_FGO_GPINTERPOLATEDDDPRFACTORO_H
 
-#include "model/archive/GPInterpolatorPose3WNOA_O.h"
+#include "model/gp_interpolator/GPInterpolatorBase.h"
 #include "factor/FactorTypeID.h"
 
 /*Inputs:

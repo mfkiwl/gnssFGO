@@ -296,7 +296,7 @@ namespace fgo::integrator {
         gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
         paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
     } else if (paramPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
+      interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
         gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
         paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
     } else {

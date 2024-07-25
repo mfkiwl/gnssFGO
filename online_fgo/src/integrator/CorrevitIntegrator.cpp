@@ -23,13 +23,6 @@ namespace fgo::integrator
 {
 
     void CorrevitIntegrator::initialize(rclcpp::Node &node, graph::GraphBase &graphPtr, const std::string& integratorName, bool isPrimarySensor) {
-      /*
-      integratorName_ = integratorName;
-      isPrimarySensor_ = isPrimarySensor;
-      rosNodePtr_ = &node;
-      graphPtr_ = &graphPtr;
-      this->initIntegratorBaseParams();
-*/
       IntegratorBase::initialize(node, graphPtr, integratorName, isPrimarySensor);
       RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "--------------------- " << integratorName << ": start initialization... ---------------------");
 

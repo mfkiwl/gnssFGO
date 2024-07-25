@@ -37,22 +37,22 @@ namespace fgo::factor {
  * 4-way factor for Gaussian Process prior factor, SE(3) version
  * 6-DOF velocity is represented by 3-DOF translational and 3-DOF rotational velocities (in body frame).
  */
-  class GPWNOAPriorPose3 : public GPPriorBase,
-                           public gtsam::NoiseModelFactor6<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3,
+  class GPWNOAPrior : public GPPriorBase,
+                      public gtsam::NoiseModelFactor6<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3,
                              gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> {
 
   private:
-    typedef GPWNOAPriorPose3 This;
+    typedef GPWNOAPrior This;
     typedef gtsam::NoiseModelFactor6<gtsam::Pose3,
       gtsam::Vector3, gtsam::Vector3, gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> Base;
 
   public:
-    GPWNOAPriorPose3() = default;    /* Default constructor only for serialization */
+    GPWNOAPrior() = default;    /* Default constructor only for serialization */
 
     /// Constructor
     /// @param delta_t is the time between the two states
 
-    GPWNOAPriorPose3(
+    GPWNOAPrior(
       gtsam::Key poseKey1, gtsam::Key velKey1, gtsam::Key omegaKey1,
       gtsam::Key poseKey2, gtsam::Key velKey2, gtsam::Key omegaKey2,
       double dt, const gtsam::SharedNoiseModel &Qc_model, bool useAutoDiff = false, bool calcJacobian = true) :
@@ -60,10 +60,10 @@ namespace fgo::factor {
       Base(gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ<6>(fgo::utils::getQc(Qc_model), dt)),
            poseKey1, velKey1, omegaKey1, poseKey2, velKey2, omegaKey2) {
       factorTypeID_ = FactorTypeID::GPWNOAMotionPrior;
-      factorName_ = "GPWNOAPriorPose3Factor";
+      factorName_ = "GPWNOAPriorFactor";
     }
 
-    ~GPWNOAPriorPose3() override = default;
+    ~GPWNOAPrior() override = default;
 
 
     /// @return a deep copy of this factor
@@ -264,8 +264,8 @@ namespace fgo::factor {
 /// traits
 namespace gtsam {
   template<>
-  struct traits<fgo::factor::GPWNOAPriorPose3>
-    : public Testable<fgo::factor::GPWNOAPriorPose3> {
+  struct traits<fgo::factor::GPWNOAPrior>
+    : public Testable<fgo::factor::GPWNOAPrior> {
   };
 }
 #endif //FGONAV_GAUSSIANPROCESSPRIORPOSE3VNWB_H

@@ -26,19 +26,19 @@
 
 namespace fgo::factor {
 
-  class GPWNOJPriorPose3Full : public GPPriorBase,
-                               public fgo::NoiseModelFactor8<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6,
+  class GPWNOJPriorFull : public GPPriorBase,
+                          public fgo::NoiseModelFactor8<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6,
                                  gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6> {
   private:
-    typedef GPWNOJPriorPose3Full This;
+    typedef GPWNOJPriorFull This;
     typedef fgo::NoiseModelFactor8<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6,
       gtsam::Pose3, gtsam::Vector3, gtsam::Vector3, gtsam::Vector6> Base;
   public:
-    GPWNOJPriorPose3Full() = default;    /* Default constructor only for serialization */
+    GPWNOJPriorFull() = default;    /* Default constructor only for serialization */
 
     /// Constructor
     /// @param delta_t is the time between the two states
-    GPWNOJPriorPose3Full(
+    GPWNOJPriorFull(
       gtsam::Key poseKey1, gtsam::Key velKey1, gtsam::Key omegaKey1, gtsam::Key accKey1,
       gtsam::Key poseKey2, gtsam::Key velKey2, gtsam::Key omegaKey2, gtsam::Key accKey2,
       double dt, const gtsam::SharedNoiseModel &Qc_model, bool useAutoDiff = false, bool calcJacobian = true,
@@ -47,10 +47,10 @@ namespace fgo::factor {
       Base(gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ3<6>(fgo::utils::getQc(Qc_model), dt)),
            poseKey1, velKey1, omegaKey1, accKey1, poseKey2, velKey2, omegaKey2, accKey2) {
       factorTypeID_ = FactorTypeID::GPWNOJMotionPrior;
-      factorName_ = "GPWNOJPriorPose3FullFactor";
+      factorName_ = "GPWNOJPriorFullFactor";
     }
 
-    ~GPWNOJPriorPose3Full() override = default;
+    ~GPWNOJPriorFull() override = default;
 
 
     /// @return a deep copy of this factor
@@ -324,7 +324,7 @@ namespace fgo::factor {
 /// traits
 namespace gtsam {
   template<>
-  struct traits<fgo::factor::GPWNOJPriorPose3Full> : public Testable<fgo::factor::GPWNOJPriorPose3Full> {
+  struct traits<fgo::factor::GPWNOJPriorFull> : public Testable<fgo::factor::GPWNOJPriorFull> {
   };
 }
 

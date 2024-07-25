@@ -20,7 +20,7 @@
 #define ONLINE_FGO_GPINTERPOLATEDTDCPFACTOR_H
 
 #include "include/factor/FactorType.h"
-#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "model/gp_interpolator/GPInterpolatorBase.h"
 #include "include/factor/FactorType.h"
 
 /*Inputs:

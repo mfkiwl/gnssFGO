@@ -20,7 +20,7 @@
 #define ONLINE_FGO_GPINTERPOLATEDTDCPFACTORNORMALCP_H
 
 #include <utility>
-#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "model/gp_interpolator/GPInterpolatorBase.h"
 #include "include/factor/FactorType.h"
 #include "factor/FactorTypeID.h"
 

@@ -1,16 +1,11 @@
 import os
+import launch.launch_description_sources
 import yaml
 from ament_index_python.packages import get_package_share_directory
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
+from launch.substitutions import LaunchConfiguration, Command
 from launch_ros.actions import Node
-
 from launch import LaunchDescription
-
-
-def get_params(p):
-    with open(p, 'r') as f:
-        return yaml.safe_load(f)
 
 
 def generate_launch_description():
@@ -100,6 +95,11 @@ def generate_launch_description():
         ]
     )
 
+    ### MAPVIZ
+    mapviz_dir = get_package_share_directory("mapviz")
+    mapviz_launch = IncludeLaunchDescription(
+        launch.launch_description_sources.PythonLaunchDescriptionSource(mapviz_dir + '/launch/mapviz.boreas.launch.py'))
+
     # Define LaunchDescription variable and return it
     ld = LaunchDescription()
 
@@ -113,6 +113,6 @@ def generate_launch_description():
     ld.add_action(declare_config_dataset_path_cmd)
     ld.add_action(declare_config_sensor_parameters_path_cmd)
     ld.add_action(online_fgo_node)
-    # ld.add_action(plot_node)
+    ld.add_action(mapviz_launch)
 
     return ld

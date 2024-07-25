@@ -305,7 +305,7 @@ namespace fgo::integrator {
         gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
         paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
     } else if (paramPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
+      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
         gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
         paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
     } else {
@@ -631,364 +631,6 @@ namespace fgo::integrator {
     return true;
   }
 
-  // ToDo: @haoming to be deleted in next release!
-
-  /*
-  fgo::data::GNSSMeasurement
-  GNSSTCIntegrator::convertGNSSMsg(irt_nav_msgs::msg::GNSSObsPreProcessed::ConstSharedPtr gnssMsg,
-                                   boost::optional<irt_nav_msgs::msg::GNSSLabeling &> satLabel) {
-    static std::map<uint32_t, double> PRNLocktimeMapAntMain = fgo::utils::GNSS::GetInitPRNLocktimeMap();
-    static std::map<uint32_t, double> PRNLocktimeMapAntAux = fgo::utils::GNSS::GetInitPRNLocktimeMap();
-    static std::vector<uint32_t> lastPRNAntMain;
-    static std::vector<uint32_t> lastPRNAntAux;
-    static std::vector<fgo::data::CycleSlipStruct> cycleSlipAux;
-    static std::vector<fgo::data::CycleSlipStruct> cycleSlipRTCM;
-    static std::vector<fgo::data::CycleSlipStruct> cycleSlipMain;
-    static uint lastRTCMRefSatID;
-    static uint lastAuxRefSatID;
-    static uint lastMainRefSatID;
-
-    const auto thisGNSSTime = rclcpp::Time(gnssMsg->header.stamp.sec, gnssMsg->header.stamp.nanosec, RCL_ROS_TIME);
-    fgo::data::GNSSMeasurement gnssMeas;
-
-    gnssMeas.measMainAnt.tow = gnssMsg->gnss_obs_ant_main.time_receive;
-    gnssMeas.measMainAnt.timestamp = thisGNSSTime;
-    auto measurement_delay = delayCalculator_->getDelay();
-    gnssMeas.measMainAnt.delay = measurement_delay;
-
-    gnssMeas.measMainAnt.timeOffsetGALGPS = gnssMsg->time_offset_gal_gps;
-    gnssMeas.measMainAnt.isGGTOValid = gnssMsg->is_ggto_valid;
-    gnssMeas.measMainAnt.integrityFlag = gnssMsg->gnss_obs_ant_main.integrity_flag;
-
-
-    if (satLabel) {
-      extractGNSSObs(gnssMsg->gnss_obs_ant_main, gnssMeas.measMainAnt.obs, true, satLabel->ant_main_labels);
-      fgo::utils::GNSS::getRTKCorrectionsFromROSMsg(gnssMsg->gnss_corrections, satLabel->ant_main_labels);
-      for (const auto &prn: gnssMsg->faulty_prn_main) {
-        if (prn)
-          satLabel->faulty_prn_main.emplace_back(prn);
-      }
-    } else {
-      extractGNSSObs(gnssMsg->gnss_obs_ant_main, gnssMeas.measMainAnt.obs);
-    }
-
-    fgo::utils::GNSS::checkCycleSlipByLocktime(gnssMeas.measMainAnt, PRNLocktimeMapAntMain, lastPRNAntMain);
-    if (satLabel) {
-      for (const auto &obs: gnssMeas.measMainAnt.obs) {
-        for (auto &label: satLabel->ant_main_labels) {
-          if (label.prn == obs.satId) {
-            label.cycle_slip = obs.cycleSlip;
-            break;
-          }
-        }
-      }
-    }
-
-    //second antenna
-    if (gnssMsg->has_dualantenna) {
-      //RCLCPP_INFO(this->get_logger(), "GNSSMsgAux");
-      gnssMeas.hasDualAntenna = true;
-      gnssMeas.measAuxAnt.tow = gnssMsg->gnss_obs_ant_aux.time_receive;
-      gnssMeas.measAuxAnt.timestamp = thisGNSSTime;
-      gnssMeas.measAuxAnt.delay = measurement_delay;
-      gnssMeas.measAuxAnt.timeOffsetGALGPS = gnssMsg->time_offset_gal_gps;
-      gnssMeas.measAuxAnt.isGGTOValid = gnssMsg->is_ggto_valid;
-      gnssMeas.measAuxAnt.integrityFlag = gnssMsg->gnss_obs_ant_aux.integrity_flag;
-
-
-      if (satLabel) {
-        extractGNSSObs(gnssMsg->gnss_obs_ant_aux, gnssMeas.measAuxAnt.obs, false, satLabel->ant_aux_labels);
-        fgo::utils::GNSS::getRTKCorrectionsFromROSMsg(gnssMsg->gnss_corrections, satLabel->ant_aux_labels);
-
-
-        for (const auto &prn: gnssMsg->faulty_prn_aux) {
-          if (prn)
-            satLabel->faulty_prn_aux.emplace_back(prn);
-        }
-      } else
-        extractGNSSObs(gnssMsg->gnss_obs_ant_aux, gnssMeas.measAuxAnt.obs, false);
-
-      fgo::utils::GNSS::checkCycleSlipByLocktime(gnssMeas.measAuxAnt, PRNLocktimeMapAntAux, lastPRNAntAux);
-      if (satLabel) {
-        for (const auto &obs: gnssMeas.measAuxAnt.obs) {
-          for (auto &label: satLabel->ant_aux_labels) {
-            if (label.prn == obs.satId) {
-              label.cycle_slip = obs.cycleSlip;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    if (gnssMsg->has_dualantenna_dd && paramPtr_->useDualAntennaDD) {
-      //RCLCPP_INFO(this->get_logger(), "GNSSMsgDUALDD");
-      gnssMeas.hasDualAntennaDD = true;
-      gnssMeas.measDualAntennaDD.tow = gnssMsg->dd_gnss_obs_dualantenna.time_receive;
-      gnssMeas.measDualAntennaDD.timestamp = thisGNSSTime;
-      gnssMeas.measDualAntennaDD.delay = measurement_delay;
-      gnssMeas.measDualAntennaDD.timeOffsetGALGPS = gnssMsg->time_offset_gal_gps;
-      gnssMeas.measDualAntennaDD.isGGTOValid = gnssMsg->is_ggto_valid;
-      gnssMeas.measDualAntennaDD.integrityFlag = gnssMsg->dd_gnss_obs_dualantenna.integrity_flag;
-      gnssMeas.measDualAntennaDD.refSatGPS.refSatSVID = gnssMsg->dd_gnss_obs_dualantenna.ref_sat_svid_gps;
-      gnssMeas.measDualAntennaDD.refSatGAL.refSatSVID = gnssMsg->dd_gnss_obs_dualantenna.ref_sat_svid_gal;
-      gnssMeas.measDualAntennaDD.ddIDXSyncRef = gnssMsg->dd_gnss_obs_dualantenna.dd_idx_sync_ref;
-      gnssMeas.measDualAntennaDD.ddIDXSyncUser = gnssMsg->dd_gnss_obs_dualantenna.dd_idx_sync_user;
-      uint refSatID = 255;
-      for (size_t i = 0; i < gnssMsg->dd_gnss_obs_dualantenna.prn.size(); i++) {
-        if (gnssMsg->dd_gnss_obs_dualantenna.prn[i] == gnssMsg->dd_gnss_obs_dualantenna.ref_sat_svid_gps) {
-          refSatID = i;
-          break;
-        }
-      }
-      if (refSatID != 255) {
-        //RCLCPP_INFO_STREAM(this->get_logger(), "12: " << refSatID);
-        gnssMeas.measDualAntennaDD.refSatGPS.refSatPos = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_pos[refSatID].x,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_pos[refSatID].y,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_pos[refSatID].z);
-        gnssMeas.measDualAntennaDD.refSatGPS.refSatVel = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_vec[refSatID].x,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_vec[refSatID].y,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_vec[refSatID].z);
-      }
-      refSatID = 255;
-      for (size_t i = 0; i < gnssMsg->dd_gnss_obs_dualantenna.prn.size(); i++) {
-        if (gnssMsg->dd_gnss_obs_dualantenna.prn[i] == gnssMsg->dd_gnss_obs_dualantenna.ref_sat_svid_gal) {
-          refSatID = i;
-          break;
-        }
-      }
-      if (refSatID != 255) {
-        gnssMeas.measDualAntennaDD.refSatGAL.refSatPos = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_pos[refSatID].x,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_pos[refSatID].y,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_pos[refSatID].z);
-        gnssMeas.measDualAntennaDD.refSatGAL.refSatVel = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_vec[refSatID].x,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_vec[refSatID].y,
-          gnssMsg->dd_gnss_obs_dualantenna.satelite_vec[refSatID].z);
-      }
-
-      extractGNSSObs(gnssMsg->dd_gnss_obs_dualantenna, gnssMeas.measDualAntennaDD.obs);
-      fgo::utils::GNSS::checkCycleSlip(gnssMeas.measDualAntennaDD, lastAuxRefSatID, cycleSlipAux, false);
-    }
-
-    gnssMeas.hasRTK = gnssMsg->has_rtk;
-
-    if (gnssMsg->has_rtcm_dd &&
-        paramPtr_->useRTCMDD) { // if gnssMeas.measRTCMDD.tow is zero, then we don't have this && gnssMsg->dd_gnss_obs_rtcm.time_receive != 0.
-      //RCLCPP_INFO(this->get_logger(), "GNSSMsgRTCMDD");
-      gnssMeas.hasRTCMDD = true;
-      gnssMeas.measRTCMDD.tow = gnssMsg->dd_gnss_obs_rtcm.time_receive;
-      gnssMeas.measRTCMDD.timestamp = thisGNSSTime;
-      gnssMeas.measRTCMDD.delay = measurement_delay; //TODO
-      gnssMeas.measRTCMDD.timeOffsetGALGPS = gnssMsg->time_offset_gal_gps;
-      gnssMeas.measRTCMDD.isGGTOValid = gnssMsg->is_ggto_valid;
-      gnssMeas.measRTCMDD.integrityFlag = gnssMsg->dd_gnss_obs_rtcm.integrity_flag;
-
-      gnssMeas.measRTCMDD.basePosRTCM = gtsam::Vector3(gnssMsg->dd_gnss_obs_rtcm.base_pos.x,
-                                                       gnssMsg->dd_gnss_obs_rtcm.base_pos.y,
-                                                       gnssMsg->dd_gnss_obs_rtcm.base_pos.z);
-      //refsat
-      gnssMeas.measRTCMDD.refSatGPS.refSatSVID = gnssMsg->dd_gnss_obs_rtcm.ref_sat_svid_gps;
-      //RCLCPP_INFO_STREAM(this->get_logger(), "refSatID: " << unsigned(gnssMsg->dd_gnss_obs_rtcm.ref_sat_svid_gps));
-      gnssMeas.measRTCMDD.refSatGAL.refSatSVID = gnssMsg->dd_gnss_obs_rtcm.ref_sat_svid_gal;
-      gnssMeas.measRTCMDD.ddIDXSyncRef = gnssMsg->dd_gnss_obs_rtcm.dd_idx_sync_ref;
-      gnssMeas.measRTCMDD.ddIDXSyncUser = gnssMsg->dd_gnss_obs_rtcm.dd_idx_sync_user;
-      uint refSatID = 255;
-      for (size_t i = 0; i < gnssMsg->dd_gnss_obs_rtcm.prn.size(); i++) {
-        if (gnssMsg->dd_gnss_obs_rtcm.prn[i] == gnssMsg->dd_gnss_obs_rtcm.ref_sat_svid_gps) {
-          refSatID = i;
-          break;
-        }
-      }
-      if (refSatID != 255) {
-        gnssMeas.measRTCMDD.refSatGPS.refSatPos = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_rtcm.satelite_pos[refSatID].x,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_pos[refSatID].y,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_pos[refSatID].z);
-        gnssMeas.measRTCMDD.refSatGPS.refSatVel = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_rtcm.satelite_vec[refSatID].x,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_vec[refSatID].y,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_vec[refSatID].z);
-      }
-      refSatID = 255;
-      for (size_t i = 0; i < gnssMsg->dd_gnss_obs_rtcm.prn.size(); i++) {
-        if (gnssMsg->dd_gnss_obs_rtcm.prn[i] == gnssMsg->dd_gnss_obs_rtcm.ref_sat_svid_gal) {
-          refSatID = i;
-          break;
-        }
-      }
-      if (refSatID != 255) {
-        gnssMeas.measRTCMDD.refSatGAL.refSatPos = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_rtcm.satelite_pos[refSatID].x,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_pos[refSatID].y,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_pos[refSatID].z);
-        gnssMeas.measRTCMDD.refSatGAL.refSatVel = gtsam::Vector3(
-          gnssMsg->dd_gnss_obs_rtcm.satelite_vec[refSatID].x,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_vec[refSatID].y,
-          gnssMsg->dd_gnss_obs_rtcm.satelite_vec[refSatID].z);
-      }
-      extractGNSSObs(gnssMsg->dd_gnss_obs_rtcm, gnssMeas.measRTCMDD.obs);
-      //for (auto &x : gnssMeas.measRTCMDD.obs){
-      //  x.prVar *= 1;
-      //  x.drVar *= 1;
-      //}
-      if (gnssMeas.measRTCMDD.obs.empty())
-        gnssMeas.hasRTCMDD = false;
-
-      if (gnssMeas.hasRTCMDD) {
-        RCLCPP_INFO(rosNodePtr_->get_logger(), "CycleSlip Start..");
-        fgo::utils::GNSS::checkCycleSlip(gnssMeas.measRTCMDD, lastRTCMRefSatID, cycleSlipRTCM, false);
-        for (fgo::data::CycleSlipStruct &x: cycleSlipRTCM) {
-          RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
-                             "satID: " << x.satID << " md: " << x.md << " md2: " << x.md2 << " sd2: " << x.sd2 << " N:"
-                                       << x.N);
-        }
-      }
-    }
-    return gnssMeas;
-  }
-   */
-
-  // ToDo: @haoming to be deleted in next release!
-/*
-  void GNSSTCIntegrator::onGNSSMsgCb(irt_nav_msgs::msg::GNSSObsPreProcessed::ConstSharedPtr gnssMsg) {
-    static rclcpp::Time last_gnss_time = rclcpp::Time(gnssMsg->header.stamp.sec, gnssMsg->header.stamp.nanosec,
-                                                      RCL_ROS_TIME);
-    static rclcpp::Time last_gnss_time_came = rosNodePtr_->now();
-    static auto start = rosNodePtr_->now();
-    static double lastDelay = 0.;
-    static uint64_t gnssCounter = 0;
-    const auto thisGNSSTime = rclcpp::Time(gnssMsg->header.stamp.sec, gnssMsg->header.stamp.nanosec, RCL_ROS_TIME);
-    static bool first_measurement = true;
-
-    irt_nav_msgs::msg::SensorProcessingReport thisProcessingReport;
-    thisProcessingReport.sensor_name = "GNSSTC";
-    thisProcessingReport.ts_measurement = thisGNSSTime.seconds();
-    thisProcessingReport.ts_start_processing = start.seconds();
-    thisProcessingReport.observation_available = true;
-
-    delayCalculator_->setTOW(gnssMsg->gnss_obs_ant_main.time_receive);
-    // we wait here for 0.001s so that the the integrator in delay calculator can set the new tow 1000000 nanosec = 0.001 sec
-
-    auto now_ = rosNodePtr_->now();
-    auto start_time = std::chrono::system_clock::now();
-    //RCLCPP_INFO_STREAM(this->get_logger(), "ON GNSS Time: " << std::fixed << thisGNSSTime.seconds() << " Now: " << this->get_clock()->now().seconds());
-    //RCLCPP_INFO_STREAM(this->get_logger(), "GNSS CB Start: " << std::fixed << this->get_clock()->now().seconds());
-    //RCLCPP_INFO_STREAM(this->get_logger(), "TOWCB: " << std::fixed << gnssMsg->gnss_obs_ant_main.time_receive);
-    //RCLCPP_INFO_STREAM(this->get_logger(), "GNSS Received with delay: " <<
-    //std::fixed << imuDataBuffer_.get_last_buffer().timestamp.seconds() - rclcpp::Time(gnssMsg->header.stamp).seconds());
-
-
-   //     NEW FOR GNSS LABELING START
-
-     //irt_nav_msgs::msg::GNSSLabeling new_label_msg;
-     //gnssLabeling_ = std::make_unique<irt_nav_msgs::msg::GNSSLabeling>();
-     //new_label_msg.counter = gnssCounter++;
-     //new_label_msg.time_receive = gnssMsg->gnss_obs_ant_main.time_receive;
-
-     //      NEW FOR GNSS LABELING END
-
-    //change datatype
-    fgo::data::GNSSMeasurement gnssMeasurement = convertGNSSMsg(gnssMsg);
-
-    thisProcessingReport.num_measurements = gnssMeasurement.measMainAnt.obs.size();
-    //rclcpp::sleep_for(std::chrono::nanoseconds(1000000));  // 10000000
-
-    //RCLCPP_WARN(appPtr_->get_logger(), "------------- DEBUG DELAY CALCULATION -------------");
-    RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), "last gnss " << std::fixed << last_gnss_time.seconds());
-    RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
-                       "this gnss " << std::fixed << rclcpp::Time(gnssMsg->header.stamp).seconds());
-    //RCLCPP_WARN_STREAM(appPtr_->get_logger(), "this gnss tow " << std::fixed << gnssMsg->gnss_obs_ant_main.time_receive);
-    //RCLCPP_WARN_STREAM(appPtr_->get_logger(), "last gnss came:" << std::fixed << last_gnss_time_came.seconds());
-    //RCLCPP_WARN_STREAM(appPtr_->get_logger(), "this gnss came: " << std::fixed << now_.seconds());
-    //RCLCPP_WARN_STREAM(appPtr_->get_logger(), "last gnss to this gnss: " << (rclcpp::Time(gnssMsg->header.stamp) - last_gnss_time).seconds());
-    //RCLCPP_WARN_STREAM(appPtr_->get_logger(), "last gnss came to this gnss came: " << (now_ - last_gnss_time_came).seconds());
-    RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
-                       "Calculated delay: " << std::fixed << gnssMeasurement.measMainAnt.delay);
-    //RCLCPP_WARN_STREAM(appPtr_->get_logger(), "Time passed: " << std::fixed << (appPtr_->now() - start).seconds() );
-
-    auto delayFromMsg = thisGNSSTime.seconds() - last_gnss_time.seconds() - 0.1; //
-
-    // we check if we need to consider last delay
-
-    if (delayFromMsg < -0.001 && lastDelay > 0)
-      delayFromMsg += lastDelay;
-
-    // + lastDelay;
-    delayFromMsg = delayFromMsg > 0.3 ? gnssMeasurement.measMainAnt.delay : delayFromMsg;
-
-
-    if (first_measurement) {
-      first_measurement = false;
-      delayFromMsg = 0.;
-      gnssMeasurement.measMainAnt.delay = 0;
-    }
-
-    if (delayFromMsg < 0.)
-      delayFromMsg = 0.;
-
-    if (!paramPtr_->delayFromPPS) {
-      RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
-                         "delay from msg: " << std::fixed << delayFromMsg << " last delay : " << lastDelay);
-      gnssMeasurement.measMainAnt.delay = delayFromMsg;
-      gnssMeasurement.measDualAntennaDD.delay = delayFromMsg;
-      gnssMeasurement.measRTCMDD.delay = delayFromMsg;
-      gnssMeasurement.measAuxAnt.delay = delayFromMsg;
-    }
-
-    if (abs(delayFromMsg) < 0.005 || delayFromMsg > 0.3)
-      lastDelay = 0.;
-    else
-      lastDelay = delayFromMsg;
-
-    //data saved in preprocessor
-    auto correctedGNSSTimeNanoSec = int64_t(
-      (thisGNSSTime.seconds() - gnssMeasurement.measMainAnt.delay) * fgo::constants::sec2nanosec);
-    auto correctedGNSSTime = rclcpp::Time(correctedGNSSTimeNanoSec, RCL_ROS_TIME);
-    //new_label_msg.header.stamp = correctedGNSSTime;
-    //new_label_msg.related_state_timestamp_nanosec = correctedGNSSTimeNanoSec;
-    //gnssLabelingPubRaw_->publish(new_label_msg);
-    // gnssLabelingMsgBuffer_.update_buffer(new_label_msg, correctedGNSSTime);
-    gnssDataBuffer_.update_buffer(gnssMeasurement, thisGNSSTime, rosNodePtr_->get_clock()->now());
-    if (0 && gnssMeasurement.hasRTCMDD) {
-      RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
-                         "==" << unsigned(gnssMeasurement.measRTCMDD.refSatGPS.refSatSVID) << "==");
-      for (auto &x: gnssMeasurement.measRTCMDD.obs) {
-        RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
-                           "Sat: " << x.satId << " pr: " << x.pr << " cp: " << paramPtr_->lambdaL1 * x.cp << " LT: "
-                                   << x.locktime
-                                   << " CS: " << x.cycleSlip << " Diff: " << x.pr - paramPtr_->lambdaL1 * x.cp);
-      }
-    }
-
-    double duration_cb = std::chrono::duration_cast<std::chrono::duration<double>>(
-      std::chrono::system_clock::now() - start_time).count();
-
-    if (duration_cb > 0.1) {
-      RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
-                         "onGNSSMsgCb: cb takes " << duration_cb << "s, more than expected 0.1s");
-    }
-
-    last_gnss_time = thisGNSSTime;
-    last_gnss_time_came = now_;
-
-    if (!graphPtr_->isGraphInitialized()) {
-      graphPtr_->updateReferenceMeasurementTimestamp(gnssMsg->gnss_obs_ant_main.time_receive, correctedGNSSTime);
-      RCLCPP_WARN(rosNodePtr_->get_logger(), "onGNSSMsgCb: graph not initialized, waiting ...");
-    }
-
-    thisProcessingReport.duration_processing = duration_cb;
-    thisProcessingReport.measurement_delay = gnssMeasurement.measMainAnt.delay;
-    thisProcessingReport.header.stamp = rosNodePtr_->now();
-    if (pubSensorReport_)
-      pubSensorReport_->publish(thisProcessingReport);
-
-  }
-*/
-
   void GNSSTCIntegrator::onGNSSMsgCb(irt_nav_msgs::msg::GNSSObsPreProcessed::ConstSharedPtr gnssMsg) {
     static rclcpp::Time last_gnss_time = rclcpp::Time(gnssMsg->header.stamp.sec, gnssMsg->header.stamp.nanosec,
                                                       RCL_ROS_TIME);
@@ -1051,8 +693,8 @@ namespace fgo::integrator {
       delayFromMsg = 0.;
 
     if (!paramPtr_->delayFromPPS) {
-      RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
-                         "delay from msg: " << std::fixed << delayFromMsg << " last delay : " << lastDelay);
+      //RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(),
+     //                   "delay from msg: " << std::fixed << delayFromMsg << " last delay : " << lastDelay);
       //gnssMeasurement.measMainAnt.delay = delayFromMsg;
       gnssMeasurement.measDualAntennaDD.delay = delayFromMsg;
       gnssMeasurement.measRTCMDD.delay = delayFromMsg;
@@ -1069,14 +711,14 @@ namespace fgo::integrator {
     else
       lastDelay = delayFromMsg;
 
-//data saved in preprocessor
+    //data saved in preprocessor
     auto correctedGNSSTimeNanoSec = int64_t(
       (thisGNSSTime.seconds() - gnssMeasurement.measMainAnt.delay) * fgo::constants::sec2nanosec);
     auto correctedGNSSTime = rclcpp::Time(correctedGNSSTimeNanoSec, RCL_ROS_TIME);
-//new_label_msg.header.stamp = correctedGNSSTime;
-//new_label_msg.related_state_timestamp_nanosec = correctedGNSSTimeNanoSec;
-//gnssLabelingPubRaw_->publish(new_label_msg);
-// gnssLabelingMsgBuffer_.update_buffer(new_label_msg, correctedGNSSTime);
+    //new_label_msg.header.stamp = correctedGNSSTime;
+    //new_label_msg.related_state_timestamp_nanosec = correctedGNSSTimeNanoSec;
+    //gnssLabelingPubRaw_->publish(new_label_msg);
+    // gnssLabelingMsgBuffer_.update_buffer(new_label_msg, correctedGNSSTime);
     gnssDataBuffer_.update_buffer(gnssMeasurement, thisGNSSTime, rosNodePtr_->get_clock()->now());
     if (0 && gnssMeasurement.hasRTCMDD) {
       RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
@@ -1115,5 +757,4 @@ namespace fgo::integrator {
 }
 
 #include <pluginlib/class_list_macros.hpp>
-
 PLUGINLIB_EXPORT_CLASS(fgo::integrator::GNSSTCIntegrator, fgo::integrator::IntegratorBase)

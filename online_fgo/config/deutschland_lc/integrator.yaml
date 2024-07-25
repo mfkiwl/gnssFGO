@@ -9,7 +9,7 @@
       IRTPVALCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
         sensorName: "reference"
-        notIntegrating: true
+        notIntegrating: false
         useForInitialization: true
         useHeaderTimestamp: true
         GNSSMeasurementFrequency: 10
@@ -54,7 +54,6 @@
         notIntegrating: false
         useForInitialization: false
         useHeaderTimestamp: true
-        transIMUToGNSSAnt1: [ 0., 0., -0.04 ] # [0.0, 0.0, 0.0]
         zeroVelocityThreshold: 0.06
 
         GNSSMeasurementFrequency: 5
@@ -63,7 +62,7 @@
         hasPitch: false
         hasRoll: false
         integrateAttitude: false
-        integrateVelocity: true
+        integrateVelocity: false
         onlyRTKFixed: false
         varScaleRTKFloat: 1.
         varScaleSingle: 5.

@@ -307,9 +307,9 @@ namespace sensors::LiDAR::LIOSAM
           odom.poseToECEF = poseToECEF.transformPoseFrom(lTimu);
           const auto rpyIncreIMU =  imuRl.rotate(relativePose.rotation().rpy());
           const auto posIncreIMU = imuRl.rotate(relativePose.translation());
-          odom.poseRelativeECEF = gtsam::Pose3(gtsam::Rot3::RzRyRx(rpyIncreIMU), posIncreIMU); //odom.poseFromECEF.between(odom.poseToECEF);
-
           const auto poseOdom = odom.poseFromECEF.between(odom.poseToECEF);
+
+          odom.poseRelativeECEF = poseOdom; //gtsam::Pose3(gtsam::Rot3::RzRyRx(rpyIncreIMU), posIncreIMU); //odom.poseFromECEF.between(odom.poseToECEF);
 
           RCLCPP_WARN_STREAM(rclcpp::get_logger("gnss_fgo"), "[LIOSAM] scan " << scanCounter << std::fixed << " relative pos: " << odom.poseRelativeECEF.translation());
           RCLCPP_WARN_STREAM(rclcpp::get_logger("gnss_fgo"), "[LIOSAM] scan " << scanCounter << std::fixed << " relative pos: " << poseOdom.translation());

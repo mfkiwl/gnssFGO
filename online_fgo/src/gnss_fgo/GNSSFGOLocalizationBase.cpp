@@ -133,24 +133,25 @@ namespace gnss_fgo {
 
     // PARAM: GP Prior
     utils::RosParameter<std::string> gpType("GNSSFGO.Graph.gpType", "WNOA", *this);
+    utils::RosParameter<bool> fullGP("GNSSFGO.Graph.fullGPPrior", false, *this);
     RCLCPP_WARN_STREAM(this->get_logger(), "gpType: " << gpType.value());
     if (gpType.value() == "WNOA")
       paramsPtr_->gpType = fgo::data::GPModelType::WNOA;
-    else if (gpType.value() == "WNOJ")
-      paramsPtr_->gpType = fgo::data::GPModelType::WNOJ;
-    else if (gpType.value() == "Singer")
-      paramsPtr_->gpType = fgo::data::GPModelType::Singer;
-    else {
+    else if (gpType.value() == "WNOJ") {
+      if (fullGP.value())
+        paramsPtr_->gpType = fgo::data::GPModelType::WNOJFull;
+      else
+        paramsPtr_->gpType = fgo::data::GPModelType::WNOJ;
+    } else if (gpType.value() == "Singer") {
+      if (fullGP.value())
+        paramsPtr_->gpType = fgo::data::GPModelType::SingerFull;
+      else
+        paramsPtr_->gpType = fgo::data::GPModelType::Singer;
+    } else {
       RCLCPP_WARN_STREAM(this->get_logger(),
                          "UNKNOWN GP motion prior " << gpType.value()
                                                     << "given. Supported: GP-WNOA, GP-WNOJ, GP-Singer. Using GP-WNOA ...");
       paramsPtr_->gpType = fgo::data::GPModelType::WNOA;
-    }
-
-    if (paramsPtr_->gpType != fgo::data::GPModelType::WNOA) {
-      utils::RosParameter<bool> fullGP("GNSSFGO.Graph.fullGPPrior", false, *this);
-      paramsPtr_->fullGPPrior = fullGP.value();
-      RCLCPP_WARN_STREAM(get_logger(), "fullGPPrior:" << (paramsPtr_->fullGPPrior ? "true" : "false"));
     }
 
     utils::RosParameter<bool> useGPPriorFactor("GNSSFGO.Graph.addGPPriorFactor", false, *this);
@@ -229,7 +230,7 @@ namespace gnss_fgo {
         // If we chose the IMU as the time reference, graph will be extended by counting high-frequent imu measurements
         // otherwise, we use ros time
         if (paramsPtr_->useIMUAsTimeReference)
-          this->onTriggerOptimization();
+          this->timeCentricFGOonIMU();
         else
           this->timeCentricFGO();
       });
@@ -320,6 +321,12 @@ namespace gnss_fgo {
       //RCLCPP_INFO_STREAM(this->get_logger(), "CB: " << std::fixed << initPVTInput.PvtGeodeticBus.RxClkBias << " CD: " << initPVTInput.PvtGeodeticBus.RxClkDrift);
       const rclcpp::Time &initTime = foundGNSSTime.first;
       const auto this_imu = imuDataBuffer_.get_buffer(initTime);
+      RCLCPP_INFO_STREAM(this->get_logger(),
+                         "(Re-)Initializing FGO current imu data size before cleaning: " << imuDataBuffer_.size());
+
+      imuDataBuffer_.cleanBeforeTime(
+        initTime.seconds() -
+        0.02); // we try to make a small compromise so that the first state could be very nery to an imu measurement
 
       lastOptimizedState_.timestamp = initTime;
 
@@ -367,6 +374,7 @@ namespace gnss_fgo {
       preIntegratorParams_->setUse2ndOrderCoriolis(true);
       currentIMUPreintegrator_ = std::make_unique<gtsam::PreintegratedCombinedMeasurements>(preIntegratorParams_,
                                                                                             lastOptimizedState_.imuBias);
+
       //the cov matrix is in NED coords, so we need to transform
       lastOptimizedState_.poseVar = (gtsam::Vector6() <<
                                                       foundPVA.rot_var, foundPVA.xyz_var).finished().asDiagonal();
@@ -376,18 +384,19 @@ namespace gnss_fgo {
 
       currentPredState_ = lastOptimizedState_;
       fgoPredStateBuffer_.update_buffer(currentPredState_, initTime, this->get_clock()->now());
+      graph_->updatePredictedBuffer(currentPredState_);
       fgoOptStateBuffer_.update_buffer(currentPredState_, initTime, this->get_clock()->now());
       fgoStateOptPub_->publish(this->convertFGOStateToMsg(lastOptimizedState_));
       fgoStateOptNavFixPub_->publish(
-        this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp, reference_trans.translation()));
-      RCLCPP_INFO_STREAM(this->get_logger(),
-                         "(Re-)Initializing FGO current imu data size before cleaning: " << imuDataBuffer_.size());
+        this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp,
+                                         reference_trans.translation()));
 
-      imuDataBuffer_.cleanBeforeTime(
-        initTime.seconds()); // we try to make a small compromise so that the first state could be very nery to an imu measurement
+      const auto currentROSTime = rclcpp::Time(this->now().nanoseconds(), RCL_ROS_TIME);
       RCLCPP_INFO_STREAM(this->get_logger(), "(Re-)Initializing FGO successful at: " << std::fixed << initTime.seconds()
                                                                                      << " current IMU data size: "
-                                                                                     << imuDataBuffer_.size());
+                                                                                     << imuDataBuffer_.size()
+                                                                                     << " current timestamp: "
+                                                                                     << currentROSTime.seconds());
       lastInitFinished_ = true;
       isStateInited_ = true;
       triggeredInit_ = false;
@@ -410,6 +419,7 @@ namespace gnss_fgo {
     else
       ts = rclcpp::Time(this->now(), RCL_ROS_TIME);
 
+    /*
     if (!paramsPtr_->initGyroBiasAsZero) {
       InitGyroBias::ExtU_InitGyroBias_T initGyroBiasInput{};
       initGyroBiasInput.InitAsZeros = false;
@@ -426,7 +436,7 @@ namespace gnss_fgo {
                                         ts,
                                         this->get_clock()->now());
       RCLCPP_INFO(this->get_logger(), "Update GyroBuffer finished!");
-    }
+    }*/
 
     //change datatype
     fgo::data::IMUMeasurement fgoIMUMeasurement;
@@ -435,18 +445,21 @@ namespace gnss_fgo {
     fgoIMUMeasurement.accLin = (gtsam::Vector3()
       << imuMeasurement->linear_acceleration.x, imuMeasurement->linear_acceleration.y, imuMeasurement->linear_acceleration.z).finished(); //acc
     fgoIMUMeasurement.accLin = preRotateIMU.rotate(fgoIMUMeasurement.accLin);
-    fgoIMUMeasurement.accLinCov = preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->linear_acceleration_covariance.data());
+    fgoIMUMeasurement.accLinCov =
+      preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->linear_acceleration_covariance.data());
     fgoIMUMeasurement.gyro = (gtsam::Vector3()
       << imuMeasurement->angular_velocity.x, imuMeasurement->angular_velocity.y, imuMeasurement->angular_velocity.z).finished(); //angular vel
     fgoIMUMeasurement.gyro = preRotateIMU.rotate(fgoIMUMeasurement.gyro);
-    fgoIMUMeasurement.gyroCov = preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->angular_velocity_covariance.data());
+    fgoIMUMeasurement.gyroCov =
+      preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->angular_velocity_covariance.data());
     //ORIENTATION ALWAYS 0,0,0,1
     fgoIMUMeasurement.AHRSOri = gtsam::Rot3(imuMeasurement->orientation.w,
-                                                  imuMeasurement->orientation.x,
-                                                  imuMeasurement->orientation.y,
-                                                  imuMeasurement->orientation.z);
+                                            imuMeasurement->orientation.x,
+                                            imuMeasurement->orientation.y,
+                                            imuMeasurement->orientation.z);
     fgoIMUMeasurement.AHRSOri = preRotateIMU.compose(fgoIMUMeasurement.AHRSOri);
-    fgoIMUMeasurement.AHRSOriCov = preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->orientation_covariance.data());
+    fgoIMUMeasurement.AHRSOriCov =
+      preRotateIMU.matrix() * gtsam::Matrix33(imuMeasurement->orientation_covariance.data());
 
     if (!lastIMUTime.nanoseconds()) // we got first measurement
     {
@@ -457,7 +470,7 @@ namespace gnss_fgo {
       fgoIMUMeasurement.dt = fgoIMUMeasurement.timestamp.seconds() - lastIMUTime.seconds();
       fgoIMUMeasurement.accRot = (fgoIMUMeasurement.gyro - lastGyro) / fgoIMUMeasurement.dt;
     }
-    imuDataBuffer_.update_buffer(fgoIMUMeasurement, fgoIMUMeasurement.timestamp, this->get_clock()->now());
+    imuDataBuffer_.update_buffer(fgoIMUMeasurement, fgoIMUMeasurement.timestamp);
 
     if (!this->isStateInited_) {
       lastIMUTime = ts;
@@ -485,8 +498,12 @@ namespace gnss_fgo {
       }
     }
 
-    const auto gravity = fgo::utils::gravity_ecef(currentPredState_.state.position());
-    const auto gravity_b = currentPredState_.state.attitude().unrotate(gravity);
+    auto gravity_b = gtsam::Vector3();
+    if (paramsPtr_->calibGravity) {
+      const auto gravity = fgo::utils::gravity_ecef(currentPredState_.state.position());
+      gravity_b = currentPredState_.state.attitude().unrotate(gravity);
+    }
+
 
     currentPredState_.mutex.lock();
     currentPredState_.timestamp = fgoIMUMeasurement.timestamp;
@@ -516,8 +533,10 @@ namespace gnss_fgo {
     const auto FGOStateMsg = gnss_fgo::GNSSFGOLocalizationBase::convertFGOStateToMsg(currentPredState_);
 
     // ToDo @haoming, the following looks ugly.
-    const auto navfixMsgRef = convertPositionToNavFixMsg(currentPredState_.state, currentPredState_.timestamp, reference_trans.translation());
-    const std::array<double, 2> llh_rad = {navfixMsgRef.latitude * fgo::constants::deg2rad, navfixMsgRef.longitude * fgo::constants::deg2rad};
+    const auto navfixMsgRef = convertPositionToNavFixMsg(currentPredState_.state, currentPredState_.timestamp,
+                                                         reference_trans.translation());
+    const std::array<double, 2> llh_rad = {navfixMsgRef.latitude * fgo::constants::deg2rad,
+                                           navfixMsgRef.longitude * fgo::constants::deg2rad};
     fgo::data::UserEstimation_T userEstimation = {llh_rad[0], llh_rad[1],
                                                   navfixMsgRef.altitude, FGOStateMsg.cbd[0],
                                                   0., 0., 0.};
@@ -553,15 +572,14 @@ namespace gnss_fgo {
         continue;
       }
 
-      //const auto currentTimestamp = std::chrono::system_clock::now();
-      //if(firstRun && std::chrono::duration_cast<std::chrono::duration<double>>(currentTimestamp - lastNotInitializedTimestamp).count() <= betweenOptimizationTime)
-      //{
-      //    RCLCPP_WARN_STREAM(this->get_logger(), "onTimer: wait first run to be set " << std::fixed << std::chrono::duration_cast<std::chrono::duration<double>>(currentTimestamp - lastNotInitializedTimestamp).count());
-      //    continue;
-      //}
-
       if (firstRun) {
         lastGraphTimestamp = lastInitROSTimestamp_.seconds();
+        static uint notifyCounter = paramsPtr_->IMUMeasurementFrequency * betweenOptimizationTime;
+        const auto imuSize = imuDataBuffer_.size();
+        if (imuSize < notifyCounter) {
+          //RCLCPP_WARN_STREAM(this->get_logger(), "onTimer: no sufficient imu data received, current imu size " << imuSize);
+          continue;
+        }
         firstRun = false;
       }
 
@@ -571,25 +589,15 @@ namespace gnss_fgo {
       //    continue;
       //}
 
-      // static uint notifyCounter = paramsPtr_->IMUMeasurementFrequency * betweenOptimizationTime;
-      //const auto imuSize = imuDataBuffer_.size();
-      //if(imuSize < notifyCounter)
-      //{
-      //    //RCLCPP_WARN_STREAM(this->get_logger(), "onTimer: no sufficient imu data received, current imu size " << imuSize);
-      //    return;
-      // }
-
       const auto currentROSTime = rclcpp::Time(this->now().nanoseconds(), RCL_ROS_TIME);
       double timeDiff = currentROSTime.seconds() - lastGraphTimestamp;
 
       if (timeDiff >= betweenOptimizationTime) {
         RCLCPP_INFO_STREAM(this->get_logger(), "onTimer: notify new optimization after: " << std::fixed << timeDiff
                                                                                           << " seconds since last notification.");
-        //this->notifyOptimization();
 
         std::chrono::time_point<std::chrono::system_clock> start;
         start = std::chrono::system_clock::now();
-        const auto start_fgo_construction = this->now();
 
         //std::cout << "State before opti " << std::fixed << currentState.timestamp.seconds() <<currentState.state << std::endl;
 
@@ -624,7 +632,7 @@ namespace gnss_fgo {
         if (constructGraphStatus == fgo::graph::StatusGraphConstruction::SUCCESSFUL) {
           RCLCPP_INFO(this->get_logger(), "Start Optimization...");
           irt_nav_msgs::msg::ElapsedTimeFGO elapsedTimeFGO;
-          elapsedTimeFGO.ts_start_construction = start_fgo_construction.seconds();
+          elapsedTimeFGO.ts_start_construction = currentROSTime.seconds();
           elapsedTimeFGO.duration_construction = timeCFG;
           elapsedTimeFGO.ts_start_optimization = this->now().seconds();
           elapsedTimeFGO.num_new_factors = graph_->nrFactors();
@@ -642,24 +650,17 @@ namespace gnss_fgo {
     }
   }
 
-  void GNSSFGOLocalizationBase::onTriggerOptimization() {
+  void GNSSFGOLocalizationBase::timeCentricFGOonIMU() {
     // in this function, the optimization trigger will be managed using the conditions,
     // on default, this function is running in a endless loop, it will stop util condition is set
-    RCLCPP_INFO(this->get_logger(), "onTriggerOptimization started on a different Thread... ");
+    RCLCPP_INFO(this->get_logger(), "timeCentricFGOonIMU started on a different Thread... ");
     while (rclcpp::ok()) {
       RCLCPP_INFO(this->get_logger(), "Starting optimization thread, waiting for trigger ...");
       std::unique_lock<std::mutex> lg(allBufferMutex_);
       conDoOpt_.wait(lg, [&] { return triggeredOpt_; });
-      // RCLCPP_INFO_STREAM(this->get_logger(),
-      //                    "Opt triggered, start FGC, Time of GNSS: " << std::fixed << gnssDataBuffer_.get_last_buffer().measMainAnt.timestamp.seconds()
-      //                    << " Time of Arrival:" << gnssDataBuffer_.get_last_time().seconds()
-      //                    << " Time now: " << this->get_clock()->now().seconds());
       std::chrono::time_point<std::chrono::system_clock> start;
       start = std::chrono::system_clock::now();
       const auto start_fgo_construction = this->now();
-
-      //std::cout << "State before opti " << std::fixed << currentState.timestamp.seconds() <<currentState.state << std::endl;
-
       std::vector<fgo::data::IMUMeasurement> imuData = imuDataBuffer_.get_all_buffer_and_clean();
 
       RCLCPP_WARN_STREAM(this->get_logger(), "Triggered Optimization with " << imuData.size() << " IMU data");
@@ -670,8 +671,6 @@ namespace gnss_fgo {
         throw std::invalid_argument("FGC failed");
       }
 
-      //TODO continue is better
-      //https://stackoverflow.com/questions/11062804/measuring-the-runtime-of-a-c-code
       double timeCFG = std::chrono::duration_cast<std::chrono::duration<double>>(
         std::chrono::system_clock::now() - start).count();
       //lg.unlock();
@@ -705,7 +704,8 @@ namespace gnss_fgo {
     fgoOptStateBuffer_.update_buffer(newOptState, newOptState.timestamp);
     auto fgoStateMsg = this->convertFGOStateToMsg(newOptState);
     fgoStateOptPub_->publish(fgoStateMsg);
-    fgoStateOptNavFixPub_->publish(convertPositionToNavFixMsg(newOptState.state, newOptState.timestamp, reference_trans.translation()));
+    fgoStateOptNavFixPub_->publish(
+      convertPositionToNavFixMsg(newOptState.state, newOptState.timestamp, reference_trans.translation()));
 
     lastOptimizedState_.mutex.lock();
     lastOptimizedState_ = newOptState;
@@ -886,10 +886,10 @@ namespace gnss_fgo {
 
           error2Gt.pos_2d_error_geographic = dist;
           error2Gt.pos_3d_error_geographic = std::sqrt(dist * dist + std::pow((ref_pos_llh.z() - pos_ant_llh.z()), 2));
-          error2Gt.pos_1d_error_ned = abs(pos_error_ned(1));//fgo_ori.unrotate(pos_error_ecef)(1)
+          error2Gt.pos_1d_error_ned = abs(pos_error_ned(0));//fgo_ori.unrotate(pos_error_ecef)(1)
           error2Gt.pos_2d_error_ned = (pos_error_ned).block<2, 1>(0, 0).norm();
           error2Gt.pos_3d_error_ned = pos_error_ned.norm();
-          error2Gt.pos_1d_error_body = abs(pos_error_body(1));
+          error2Gt.pos_1d_error_body = abs(pos_error_body(0));
           error2Gt.pos_2d_error_body = (pos_error_body).block<2, 1>(0, 0).norm();
           error2Gt.pos_3d_error_body = pos_error_body.norm();
           error2Gt.pos_2d_error_ecef = (pos_diff_ecef).block<2, 1>(0, 0).norm();

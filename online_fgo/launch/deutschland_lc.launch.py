@@ -8,31 +8,25 @@ from launch_ros.actions import Node
 from launch import LaunchDescription
 
 
-def get_params(p):
-    with open(p, 'r') as f:
-        return yaml.safe_load(f)
-
 def generate_launch_description():
     logger = LaunchConfiguration("log_level")
-    share_dir = get_package_share_directory('online_fgo')
-    xacro_path = os.path.join(share_dir, 'config/deuschland_lc', 'dienstwagen.urdf.xacro')
 
     config_common_path = LaunchConfiguration('config_common_path')
     default_config_common = os.path.join(
         get_package_share_directory('online_fgo'),
-        'config/deuschland_lc',
+        'config/deutschland_lc',
         'common.yaml'
     )
 
     default_config_integrator = os.path.join(
         get_package_share_directory('online_fgo'),
-        'config/deuschland_lc',
+        'config/deutschland_lc',
         'integrator.yaml'
     )
 
     default_config_optimizer = os.path.join(
         get_package_share_directory('online_fgo'),
-        'config/deuschland_lc',
+        'config/deutschland_lc',
         'optimizer.yaml'
     )
 
@@ -88,31 +82,7 @@ def generate_launch_description():
         # ]
     )
 
-    robot_des = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='screen',
-        parameters=[{
-            'robot_description': Command(['xacro', ' ', xacro_path])
-        }]
-    )
 
-    plot_node = Node(
-        package='rqt_plot',
-        executable='rqt_plot',
-        name="rqt_plot_fgo",
-        output='screen',
-        # arguments=['--ros-args', '--log-level', logger],
-        parameters=[
-            {
-                "use_sim_time": True
-            }
-            # Overriding
-            # {
-            # }
-        ]  # ,
-    )
     # Define LaunchDescription variable and return it
     ld = LaunchDescription()
 
@@ -125,7 +95,6 @@ def generate_launch_description():
     ld.add_action(declare_config_optimizer_path_cmd)
     ld.add_action(declare_config_sensor_parameters_path_cmd)
     ld.add_action(online_fgo_node)
-    ld.add_action(robot_des)
     # ld.add_action(plot_node)
 
     return ld

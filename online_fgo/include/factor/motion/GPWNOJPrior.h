@@ -12,47 +12,50 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 //
-//  Author: Zirui Bai (zirui.bai@rwth-aachen.de)
-//          Haoming Zhang (haoming.zhang@rwth-aachen.de)
+//  Author: Haoming Zhang (haoming.zhang@rwth-aachen.de)
 //
 //
 
+#ifndef ONLINE_FGO_GPWNOJPRIOR_H
+#define ONLINE_FGO_GPWNOJPRIOR_H
 
-#ifndef ONLINE_FGO_GPSINGERPRIORPOSE3
-#define ONLINE_FGO_GPSINGERPRIORPOSE3
 #pragma once
 
 #include "GPPriorBase.h"
 
+namespace gtsam {
+  GTSAM_MAKE_VECTOR_DEFS(18)
+}
+
 namespace fgo::factor {
-  class GPSingerPriorPose3 : public GPPriorBase,
-                             public gtsam::NoiseModelFactor6<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3,
-                               gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> {
-  private:
-    typedef GPSingerPriorPose3 This;
+
+  class GPWNOJPrior : public GPPriorBase,
+                      public gtsam::NoiseModelFactor6<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3,
+                             gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> {
+  protected:
+    typedef GPWNOJPrior This;
     typedef gtsam::NoiseModelFactor6<gtsam::Pose3, gtsam::Vector3, gtsam::Vector3,
       gtsam::Pose3, gtsam::Vector3, gtsam::Vector3> Base;
 
-
   public:
-    GPSingerPriorPose3() = default;
+    GPWNOJPrior() = default;    /* Default constructor only for serialization */
 
-    GPSingerPriorPose3(
+    /// Constructor
+    /// @param delta_t is the time between the two states
+    GPWNOJPrior(
       gtsam::Key poseKey1, gtsam::Key velKey1, gtsam::Key omegaKey1,
       gtsam::Key poseKey2, gtsam::Key velKey2, gtsam::Key omegaKey2,
-      double dt, const gtsam::SharedNoiseModel &Qc_model, const gtsam::Matrix6 &ad,
-      const gtsam::Vector6 &accI = gtsam::Vector6(), const gtsam::Vector6 &accJ = gtsam::Vector6(),
-      bool useAutoDiff = false,
-      bool calcJacobian = true) :
-      GPPriorBase(dt, ad, accI, accJ, useAutoDiff, calcJacobian),
-      Base(gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ<6>(fgo::utils::getQc(Qc_model), ad, dt)), poseKey1,
-           velKey1, omegaKey1, poseKey2, velKey2, omegaKey2) {
-      factorTypeID_ = FactorTypeID::GPSingerMotionPrior;
-      factorName_ = "GPSingerPriorPose3Factor";
-
+      const gtsam::Vector6 &accI, const gtsam::Vector6 &accJ,
+      double dt, const gtsam::SharedNoiseModel &Qc_model, bool useAutoDiff = false, bool calcJacobian = true) :
+      GPPriorBase(dt, accI, accJ, useAutoDiff, calcJacobian),
+      Base(gtsam::noiseModel::Gaussian::Covariance(fgo::utils::calcQ3<6>(fgo::utils::getQc(Qc_model), dt)),
+           poseKey1, velKey1, omegaKey1, poseKey2, velKey2, omegaKey2) {
+      factorTypeID_ = FactorTypeID::GPWNOJMotionPrior;
+      factorName_ = "GPWNOJPriorFactor";
     }
 
-    ~GPSingerPriorPose3() override = default;
+    ~GPWNOJPrior() override = default;
+
 
     /// @return a deep copy of this factor
     [[nodiscard]] gtsam::NonlinearFactor::shared_ptr clone() const override {
@@ -77,35 +80,33 @@ namespace fgo::factor {
         // jacobians
         if (H1) {
           *H1 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
-            std::bind(&This::evaluateError_, this, std::placeholders::_1, vel1, omega1, pose2, vel2, omega2), pose1,
+            boost::bind(&This::evaluateError_, this, boost::placeholders::_1, vel1, omega1, pose2, vel2, omega2), pose1,
             1e-5);
         }
         if (H2) {
           *H2 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, std::placeholders::_1, omega1, pose2, vel2, omega2), vel1,
+            boost::bind(&This::evaluateError_, this, pose1, boost::placeholders::_1, omega1, pose2, vel2, omega2), vel1,
             1e-5);
         }
         if (H3) {
           *H3 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, std::placeholders::_1, pose2, vel2, omega2), omega1,
+            boost::bind(&This::evaluateError_, this, pose1, vel1, boost::placeholders::_1, pose2, vel2, omega2), omega1,
             1e-5);
         }
 
         if (H4) {
           *H4 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Pose3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, std::placeholders::_1, vel2, omega2), pose2,
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, boost::placeholders::_1, vel2, omega2), pose2,
             1e-5);
         }
-
         if (H5) {
           *H5 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, std::placeholders::_1, omega2), vel2,
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, boost::placeholders::_1, omega2), vel2,
             1e-5);
         }
-
         if (H6) {
           *H6 = gtsam::numericalDerivative11<gtsam::Vector, gtsam::Vector3>(
-            std::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, std::placeholders::_1), omega2,
+            boost::bind(&This::evaluateError_, this, pose1, vel1, omega1, pose2, vel2, boost::placeholders::_1), omega2,
             1e-5);
         }
 
@@ -113,19 +114,20 @@ namespace fgo::factor {
       } else {
         Matrix6 Hinv, Hcomp1, Hcomp2, Hlogmap;
         Vector6 r;
-        if (H1 || H6)
+        if (H1 || H4)
           r = Pose3::Logmap(pose1.inverse(&Hinv).compose(pose2, &Hcomp1, &Hcomp2), &Hlogmap);
         else
           r = Pose3::Logmap(pose1.inverse().compose(pose2));
 
         Matrix6 Jinv = gtsam::I_6x6;
         if (calcJacobian_) {
-          Jinv = fgo::utils::rightJacobianPose3inv(r);  // we use the right Jacobian because the way we calculated r
+          Jinv = fgo::utils::rightJacobianPose3inv(r);
         }
 
         Matrix63 H1v, H1w, H2v, H2w;
         Matrix6 H1p, H2p;
         Matrix_18_6 Hv1, Hv2;
+
         Vector6 v1, v2;
 
         if (H2 || H3 || H5 || H6) {
@@ -137,6 +139,8 @@ namespace fgo::factor {
           v2 = convertVwWbToVbWb(vel2, omega2, pose2);
         }
 
+        // in GTSAM we have rot_n before trans
+        // then. xi^curlyvee = [phi, pho]^curlyvee = [phi^ 0; pho^ phi^]
         const gtsam::Vector6 JinvVel2 = Jinv * v2;
         const gtsam::Vector3 omegaJinvVel2 = JinvVel2.head(3), rho2JinvVel2 = JinvVel2.tail(3);
         const gtsam::Matrix3 X = gtsam::skewSymmetric(omegaJinvVel2), Y = gtsam::skewSymmetric(rho2JinvVel2);
@@ -160,23 +164,20 @@ namespace fgo::factor {
         }
 
         gtsam::Matrix6 JdiffV2 = gtsam::Matrix6::Zero();
-        if ((H1 || H6) && calcJacobian_)
+        if ((H1 || H4) && calcJacobian_)
           JdiffV2 = jacobianMethodNumercialDiff(rightJacobianPose3inv, r, v2);
 
 
         if (H1) {
-          gtsam::Matrix6 J_Ti =
-            Hlogmap * Hcomp1 * Hinv;  // de_p / d_Ti the Hinv captures the sign of this Jacobian (to be -1)
+          gtsam::Matrix6 J_Ti = Hlogmap * Hcomp1 * Hinv;
+
           gtsam::Matrix6 Jdiff_Ti = gtsam::Matrix6::Zero();
           if (calcJacobian_) {
             Jdiff_Ti = JdiffV2 * J_Ti;
           }
-
           *H1 = (fgo::utils::Matrix_18_6() << J_Ti - delta_t_ * H1p,  //
             Jdiff_Ti - H1p,
-            (0.25 * V2SkewMatrix * V2SkewMatrix + 0.5 * A2SkewMatrix) *
-            J_Ti).finished(); // we use the approx. Jacobian from Barfoot's book
-          // instead, one can use the nummerical diff to calculate the Jacobian
+            (0.25 * V2SkewMatrix * V2SkewMatrix + 0.5 * A2SkewMatrix) * J_Ti).finished();
 
           // checked on 28th. Aug.
         }
@@ -186,10 +187,12 @@ namespace fgo::factor {
 
         if (H4) {
           gtsam::Matrix6 J_Tj = Hlogmap * Hcomp2;
+
           gtsam::Matrix6 Jdiff_Ti = gtsam::Matrix6::Zero();
           if (calcJacobian_) {
             Jdiff_Ti = JdiffV2 * J_Tj;
           }
+          // JinvVel2SkewMatrix * v2 = - v2SkewMatrix * Jinv*V2
           *H4 = (fgo::utils::Matrix_18_6() << J_Tj,
             Jdiff_Ti + Jinv * H2p,
             (0.25 * V2SkewMatrix * V2SkewMatrix + 0.5 * A2SkewMatrix) * J_Tj).finished();
@@ -198,9 +201,10 @@ namespace fgo::factor {
         if (H5) *H5 = Hv2 * H2v;
         if (H6) *H6 = Hv2 * H2w;
 
-        return (gtsam::Vector(18) << r - v1 * delta_t_ - c1_ * accI_,
-          Jinv * v2 - v1 - c2_ * accI_,
-          -0.5 * JinvVel2SkewMatrix * v2 + Jinv * accJ_ - c3_ * accI_).finished();
+        return (gtsam::Vector(18) << (r - v1 * delta_t_ - accI_ / 2 * pow(delta_t_, 2)),
+          Jinv * v2 - v1 - accI_ * delta_t_,
+          -0.5 * JinvVel2SkewMatrix * v2 + Jinv * accJ_ - accI_).finished();
+
       }
     }
 
@@ -226,9 +230,9 @@ namespace fgo::factor {
         << skew_v_omega, gtsam::Matrix3::Zero(), skew_vel_linear, skew_v_omega).finished();
       // RA-L Tang et al. eq (41)
       //std::cout << JinvVel2SkewMatrix << std::endl;
-      gtsam::Vector err = (gtsam::Vector(18) << r - v1 * delta_t_ - c1_ * accI_,
-        Jinv * v2 - v1 - c2_ * accI_,
-        -0.5 * JinvVel2SkewMatrix * v2 + Jinv * accJ_ - c3_ * accI_).finished();
+      gtsam::Vector err = (gtsam::Vector(18) << (r - v1 * delta_t_ - 0.5 * accI_ * pow(delta_t_, 2)),
+        Jinv * v2 - v1 - accI_ * delta_t_,
+        -0.5 * JinvVel2SkewMatrix * v2 + Jinv * accJ_ - accI_).finished();
       return err;
     }
 
@@ -269,6 +273,7 @@ namespace fgo::factor {
       return values;
     }
 
+
     /** equals specialized to this factor */
     [[nodiscard]] bool equals(const gtsam::NonlinearFactor &expected, double tol = 1e-9) const override {
       const This *e = dynamic_cast<const This *> (&expected);
@@ -293,13 +298,12 @@ namespace fgo::factor {
   }; // GaussianProcessPriorPose3
 } // namespace fgo
 
-
 /// traits
 namespace gtsam {
   template<>
-  struct traits<fgo::factor::GPSingerPriorPose3> : public Testable<fgo::factor::GPSingerPriorPose3> {
+  struct traits<fgo::factor::GPWNOJPrior> : public Testable<fgo::factor::GPWNOJPrior> {
   };
 }
 
 
-#endif
+#endif //ONLINE_FGO_GPWNOJPRIOR_H

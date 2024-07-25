@@ -32,7 +32,7 @@
         pseudorangeFactorTil: 0  # 10s
 
         pseudorangeVarScaleAntMain: 2400. #4800. #3600
-        dopplerrangeVarScaleAntMain: 8.
+        dopplerrangeVarScaleAntMain: 24.
         pseudorangeVarScaleAntAux: 2400. #4800. #3600
         dopplerrangeVarScaleAntAux: 8.
         carrierStdScale: 1000.
@@ -114,7 +114,7 @@
         downsampleRate: 1
         lidarMinRange: 4.
         lidarMaxRange: 1000.
-        maxPosePriorLiDARMsgAging: 0.3
+        maxPosePriorLiDARMsgAging: 0.15
         edgeFeatureMinValidNum: 10
         surfFeatureMinValidNum: 100
         numberOfCores: 16

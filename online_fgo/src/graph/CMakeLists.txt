@@ -21,7 +21,7 @@ set(ONLINEFGO_GRAPH_NAME
 add_library(${ONLINEFGO_GRAPH_NAME} 
     SHARED
     GraphBase.cpp
-    GraphSensorCentric.cpp
+    #GraphSensorCentric.cpp
     GraphTimeCentric.cpp
 )
 target_include_directories(${ONLINEFGO_GRAPH_NAME}

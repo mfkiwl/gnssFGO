@@ -48,16 +48,6 @@ namespace gnss_fgo {
     bool addGPPriorFactor = false;
     bool addGPInterpolatedFactor = false;
     fgo::data::GPModelType gpType = fgo::data::GPModelType::WNOA;
-    bool fullGPPrior = false;
-
-    //gtsam::Point3 transIMUToCorrevit = gtsam::Point3(0, 0, 0);
-    //gtsam::Point3 transIMUToReference = gtsam::Point3(0, 0, 0);
-
-    //gtsam::Rot3 rotIMUToReference = gtsam::Rot3();
-    //gtsam::Point3 transIMUToAnt1 = gtsam::Point3(0, 0, 0);  // lever arm between imu and phase center of main antenna
-    //gtsam::Point3 transIMUToAnt2 = gtsam::Point3(0, 0, 0);
-    //gtsam::Point3 transIMUToLiDAR = gtsam::Point3(0.339560, 0, -0.0787);
-    //gtsam::Rot3 rotIMUtoLiDAR = gtsam::Rot3::Roll(-M_PI);
 
     bool UsePPSTimeSync = true;
 
@@ -65,11 +55,6 @@ namespace gnss_fgo {
     bool initGyroBiasAsZero = true;
     bool cleanIMUonInit = true;
     bool useHeaderTimestamp = true;
-    //gtsam::Rot3 imuRot = gtsam::Rot3::Identity();
-
-    // publisher
-    //bool pubNavFixAntMain = true;
-    //bool pubNavFixAntAux = false;
 
     virtual ~GNSSFGOParams()
     = default;

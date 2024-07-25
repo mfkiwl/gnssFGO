@@ -33,7 +33,7 @@
 #include <gtsam/navigation/ImuBias.h>
 #include <gtsam/base/numericalDerivative.h>
 
-#include "model/gp_interpolator/GPWNOAInterpolator_old.h"
+#include "model/gp_interpolator/GPInterpolatorBase.h"
 #include "utils/NavigationTools.h"
 #include "include/factor/FactorType.h"
 #include "factor/FactorTypeID.h"

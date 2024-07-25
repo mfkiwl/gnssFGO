@@ -49,8 +49,11 @@
 
 #include "factor/motion/ConstDriftFactor.h"
 #include "factor/motion/ConstVelPriorFactor.h"
-#include "factor/motion/GPWNOAPriorPose3.h"
-#include "factor/motion/GPWNOJPriorPose3.h"
+#include "factor/motion/GPWNOAPrior.h"
+#include "factor/motion/GPWNOJPrior.h"
+#include "factor/motion/GPWNOJPriorFull.h"
+#include "factor/motion/GPSingerPrior.h"
+#include "factor/motion/GPSingerPriorFull.h"
 #include "solver/FixedLagSmoother.h"
 #include "solver/BatchFixedLagSmoother.h"
 #include "solver/IncrementalFixedLagSmoother.h"
@@ -62,6 +65,7 @@
 #include "gnss_fgo/param/GNSSFGOParams.h"
 #include "utils/GPUtils.h"
 #include "sensor/SensorCalibrationManager.h"
+#include "utils/AlgorithmicUtils.h"
 
 
 namespace fgo::integrator {
@@ -207,24 +211,46 @@ namespace fgo::graph {
       this->emplace_shared<fgo::factor::MotionModelFactor>(pose_i, vel_i, pose_j, vel_j, dt, noise_model_mm);
     }
 
-    inline void addGPMotionPrior(const gtsam::Key &pose_i, const gtsam::Key &vel_i, const gtsam::Key &omega_i,
-                                 const gtsam::Key &pose_j, const gtsam::Key &vel_j, const gtsam::Key &omega_j,
-                                 double dt,
-                                 const boost::optional<gtsam::Vector6> &acc_i = boost::none,
-                                 const boost::optional<gtsam::Vector6> &acc_j = boost::none) {
+    inline void addGPMotionPrior(
+      const gtsam::Key &poseKey_i, const gtsam::Key &velKey_i, const gtsam::Key &omegaKey_i, const gtsam::Key &accKey_i,
+      const gtsam::Key &poseKey_j, const gtsam::Key &velKey_j, const gtsam::Key &omegaKey_j, const gtsam::Key &accKey_j,
+      double dt,
+      const boost::optional<gtsam::Vector6> &acc_i = boost::none,
+      const boost::optional<gtsam::Vector6> &acc_j = boost::none,
+      const boost::optional<gtsam::Matrix6> &ad = boost::none) {
       gtsam::SharedNoiseModel qcModel = gtsam::noiseModel::Diagonal::Variances(graphBaseParamPtr_->QcGPMotionPriorFull);
 
-      if (acc_i && acc_j) {
-        this->emplace_shared<fgo::factor::GPWNOJPriorPose3>(pose_i, vel_i, omega_i, pose_j, vel_j,
-                                                            omega_j, *acc_i, *acc_j, dt, qcModel,
-                                                            graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
-                                                            graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
+      if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
+        this->emplace_shared<fgo::factor::GPWNOAPrior>(poseKey_i, velKey_i, omegaKey_i, poseKey_j, velKey_j,
+                                                       omegaKey_j, dt, qcModel,
+                                                       graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
+                                                       graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
+      } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::WNOJ) {
+        this->emplace_shared<fgo::factor::GPWNOJPrior>(poseKey_i, velKey_i, omegaKey_i, poseKey_j, velKey_j,
+                                                       omegaKey_j, *acc_i, *acc_j, dt, qcModel,
+                                                       graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
+                                                       graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
+      } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::WNOJFull) {
+        this->emplace_shared<fgo::factor::GPWNOJPriorFull>(poseKey_i, velKey_i, omegaKey_i, accKey_i,
+                                                           poseKey_j, velKey_j, omegaKey_j, accKey_j,
+                                                           dt, qcModel,
+                                                           graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
+                                                           graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian,
+                                                           *acc_i, *acc_j);
+      } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::Singer) {
+        this->emplace_shared<fgo::factor::GPSingerPrior>(poseKey_i, velKey_i, omegaKey_i, poseKey_j, velKey_j,
+                                                         omegaKey_j, dt, qcModel, *ad, *acc_i, *acc_j,
+                                                         graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
+                                                         graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
+      } else if (graphBaseParamPtr_->gpType == fgo::data::GPModelType::SingerFull) {
 
-      } else
-        this->emplace_shared<fgo::factor::GPWNOAPriorPose3>(pose_i, vel_i, omega_i, pose_j, vel_j,
-                                                            omega_j, dt, qcModel,
-                                                            graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
-                                                            graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian);
+        this->emplace_shared<fgo::factor::GPSingerPriorFull>(poseKey_i, velKey_i, omegaKey_i, accKey_i,
+                                                             poseKey_j, velKey_j, omegaKey_j, accKey_j,
+                                                             dt, qcModel, *ad,
+                                                             graphBaseParamPtr_->AutoDiffGPMotionPriorFactor,
+                                                             graphBaseParamPtr_->GPInterpolatedFactorCalcJacobian,
+                                                             *acc_i, *acc_j);
+      }
     }
 
     void notifyOptimization();
@@ -242,7 +268,8 @@ namespace fgo::graph {
     explicit GraphBase(gnss_fgo::GNSSFGOLocalizationBase &node);
 
     [[nodiscard]] GraphParamBasePtr getParamPtr() { return graphBaseParamPtr_; }
-    [[nodiscard]] sensor::SensorCalibrationManager::Ptr getSensorCalibManagerPtr() {return sensorCalibManager_;}
+
+    [[nodiscard]] sensor::SensorCalibrationManager::Ptr getSensorCalibManagerPtr() { return sensorCalibManager_; }
 
     /***
      * initialize the graph, used in the application after collecting all prior variables

@@ -4,7 +4,7 @@
     use_sim_time: true
     GNSSFGO:
       verbose: false
-      useIMUAsTimeReference: true
+      useIMUAsTimeReference: false
       bufferSize: 10
       optFrequency: 10 #in Hz
       calcErrorOnOpt: true
@@ -20,7 +20,7 @@
         initSigmaC: [ 1000., 10. ] #cb in m, cd in m/s
 
       IMUPreintegrator:
-        accelerometerSigma: 0.008077134407821842 #3.9939570888238808e-04 #8e-4 # 8e-4
+        accelerometerSigma: 3.9939570888238808e-04 #8e-4 # 8e-4
         integrationSigma: 1e-4
         gyroscopeSigma: 0.0006939335887264338 #1.5636343949698187e-05   #52e-4 # 52e-5
         biasAccSigma: 4e-4 # 4e-4 0.000167  #
@@ -66,7 +66,7 @@
         VoteNearZeroVelocity: 0.1 # 20%
         NoOptimizationAfterStates: 0
 
-      Integrators: [ "GNSSTCIntegrator", ]   # ["GNSSTCIntegrator", "LIOIntegrator"]
+      Integrators: [ "GNSSTCIntegrator", "LIOIntegrator"]   # ["GNSSTCIntegrator", "LIOIntegrator"]
 
       Optimizer:
         #undefined, BatchFixedLag, IncrementalFixedLag

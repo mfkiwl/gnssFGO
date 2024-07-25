@@ -21,11 +21,9 @@
 namespace fgo::integrator {
   void LIOIntegrator::initialize(rclcpp::Node &node, fgo::graph::GraphBase &graphPtr, const std::string &integratorName,
                                  bool isPrimarySensor) {
-    integratorName_ = integratorName;
-    isPrimarySensor_ = isPrimarySensor;
-    rosNodePtr_ = &node;
-    graphPtr_ = &graphPtr;
-    this->initIntegratorBaseParams();
+    IntegratorBase::initialize(node, graphPtr, integratorName, isPrimarySensor);
+    RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(),
+                       "--------------------- " << integratorName << ": start initialization... ---------------------");
 
     integratorParamPtr_ = std::make_shared<IntegratorOdomParams>(integratorBaseParamPtr_);
 
@@ -64,10 +62,6 @@ namespace fgo::integrator {
     integratorParamPtr_->robustParamOdomPose = robustParamOdomPose.value();
     integratorBaseParamPtr_->robustParamOdomPose = robustParamOdomPose.value();
 
-    pubSensorReport_ = rosNodePtr_->create_publisher<irt_nav_msgs::msg::SensorProcessingReport>(
-      "sensor_processing_report/" + integratorName_,
-      rclcpp::SystemDefaultsQoS());
-
     LIOSAM_ = std::make_shared<sensors::LiDAR::LIOSAM::LIOSAMOdometry>(node, integratorParamPtr_,
                                                                        callbackGroupMap_["LIOSAM"],
                                                                        callbackGroupMap_["LIOSAMLoop"],
@@ -85,10 +79,10 @@ namespace fgo::integrator {
         gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
         integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
     } else if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
+      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
         gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
         integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
-      interpolatorJ_ = std::make_shared<fgo::models::GPWNOAInterpolatorPose3>(
+      interpolatorJ_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
         gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
         integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
     } else {

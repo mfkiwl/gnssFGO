@@ -7,14 +7,10 @@
       useIMUAsTimeReference: false
       bufferSize: 10
       optFrequency: 10 #in Hz
+      stateFrequency: 10
       calcErrorOnOpt: true
       cleanIMUonInit: true    # set this flag to clean the imu data before the timestamp of the initializing state
       useHeaderTimestamp: true
-      #pubPoseVel: true
-      #pubFGOState: true
-      #pubPVTError: true
-      #pubTimer: true
-      #msg_lower_bound: 5000000 # 5 ms
 
       Initialization:
         initSigmaX: [ 1., 1., 1., 0.5, 0.5, 1. ] #first 3 for Rot in degree, other for translation in m
@@ -44,8 +40,8 @@
         AutoDiffGPMotionPriorFactor: false
         GPInterpolatedFactorCalcJacobian: true
 
-        StateMeasSyncUpperBound: 0.01
-        StateMeasSyncLowerBound: -0.01
+        StateMeasSyncUpperBound: 0.02
+        StateMeasSyncLowerBound: -0.02
         addMMFactor: false
         addConstDriftFactor: true
 

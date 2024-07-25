@@ -18,7 +18,6 @@
 
 #ifndef ONLINE_FGO_INTEGRATEGNSSLC_H
 #define ONLINE_FGO_INTEGRATEGNSSLC_H
-
 #pragma once
 
 #include <irt_nav_msgs/msg/pps.hpp>
@@ -151,13 +150,6 @@ namespace fgo::integrator {
       thisProcessingReport.sensor_name = "GNSSLC";
       thisProcessingReport.observation_available = true;
 
-      //sensor_msgs::msg::NavSatFix pvtNavMsg;
-      //pvtNavMsg.header.stamp = thisPVTTime;
-      //pvtNavMsg.latitude = pvtMsg->phi_geo * fgo::constants::rad2deg;
-      //pvtNavMsg.longitude = pvtMsg->lambda_geo * fgo::constants::rad2deg;
-      //pvtNavMsg.altitude= pvtMsg->h_geo;
-      //pvtTestPub_->publish(pvtNavMsg);
-
       sumVelocity += pva.vel_n;
       //rclcpp::sleep_for(std::chrono::nanoseconds(1000000));  // 10000000
       auto pvtDelay = 0; //this->PVTDelayCalculator_->getDelay()  + paramPtr_->pvtMeasTimeOffset;
@@ -234,7 +226,6 @@ namespace fgo::integrator {
         RCLCPP_WARN(rosNodePtr_->get_logger(), "onIRTPVTMsgCb: graph not initialized, waiting ...");
       }
 
-      //std::cout << std::fixed << "pvt lsat delay : " << delayFromMsg << std::endl;
       thisProcessingReport.measurement_delay = pva.delay;
       thisProcessingReport.header.stamp = rosNodePtr_->now();
       thisProcessingReport.duration_processing = (rosNodePtr_->now() - ts_start_processing).seconds();
@@ -312,48 +303,18 @@ namespace fgo::integrator {
   private:
 
     void onOdomMsgCb(const nav_msgs::msg::Odometry::ConstSharedPtr pva) {
+      static const auto transSensorFromBase = sensorCalibManager_->getTransformationFromBase(sensorName_);
       // ATTENTION: here we use ENU as tangent frame
-      fgo::data::PVASolution this_pva{};
       rclcpp::Time ts = rclcpp::Time(pva->header.stamp.sec, pva->header.stamp.nanosec, RCL_ROS_TIME);
-      this_pva.timestamp = ts;
-      this_pva.tow = ts.seconds();
-      this_pva.type = fgo::data::GNSSSolutionType::RTKFIX;
 
-      this_pva.llh = (gtsam::Vector3() << pva->pose.pose.position.x * fgo::constants::deg2rad,
-        pva->pose.pose.position.y * fgo::constants::deg2rad,
-        pva->pose.pose.position.z - 37.).finished();
-
-      /* !
-       *  TODO: variance for the pva: is this provided in the odometry msg?
-       */
-
-      this_pva.xyz_ecef = fgo::utils::llh2xyz(this_pva.llh);
-      this_pva.xyz_var = (gtsam::Vector3() << .5, 0.5, 2.).finished();
-      //const auto nedRenu = gtsam::Rot3(fgo::utils::nedRenu_llh(this_pva.llh));
-      const auto eRenu = gtsam::Rot3(fgo::utils::enuRe_Matrix_asLLH(this_pva.llh)).inverse();
-
-      this_pva.vel_n = (gtsam::Vector3() << pva->twist.twist.linear.x,
-        pva->twist.twist.linear.y,
-        pva->twist.twist.linear.z).finished();
-      this_pva.vel_ecef = eRenu.rotate(this_pva.vel_n);
-
-      this_pva.rot_n = gtsam::Rot3::Quaternion(pva->pose.pose.orientation.w,
-                                               pva->pose.pose.orientation.x,
-                                               pva->pose.pose.orientation.y,
-                                               pva->pose.pose.orientation.z);
-
-      this_pva.rot_ecef = eRenu.compose(this_pva.rot_n);
-      this_pva.has_heading = true;
-      this_pva.has_roll_pitch = true;
-      this_pva.has_velocity_3D = true;
-      this_pva.has_velocity = true;
+      const auto [this_pva, state] = sensor::gnss::parseOdomMsg(*pva, ts, transSensorFromBase.translation(),
+                                                                transSensorFromBase.rotation());
       GNSSPVABuffer_.update_buffer(this_pva, ts);
 
       if (paramPtr_->useForInitialization && !graphPtr_->isGraphInitialized()) {
         graphPtr_->updateReferenceMeasurementTimestamp(this_pva.tow, this_pva.timestamp);
         RCLCPP_WARN(rosNodePtr_->get_logger(), "onOdomMsgCb: graph not initialized, waiting ...");
       }
-
     }
 
     void onIRTPVTMsgCb(const irt_nav_msgs::msg::PVAGeodetic::ConstSharedPtr pvaMsg) {
@@ -369,34 +330,17 @@ namespace fgo::integrator {
     }
 
     void onINSPVAXMsgCb(novatel_oem7_msgs::msg::INSPVAX::ConstSharedPtr pva) {
+      static const auto transSensorFromBase = sensorCalibManager_->getTransformationFromBase(sensorName_);
       rclcpp::Time msg_timestamp;
       if (paramPtr_->useHeaderTimestamp)
         msg_timestamp = rclcpp::Time(pva->header.stamp.sec, pva->header.stamp.nanosec, RCL_ROS_TIME);
       else
         msg_timestamp = rclcpp::Time(rosNodePtr_->now(), RCL_ROS_TIME);
-      fgo::data::PVASolution sol{};
-      sol.timestamp = msg_timestamp;
-      sol.tow = pva->nov_header.gps_week_milliseconds * 0.001;
-      sol.type = fgo::utils::GNSS::getOEM7PVTSolutionType(pva->pos_type.type);
-      sol.llh = (gtsam::Vector3() << pva->latitude * fgo::constants::deg2rad, pva->longitude * fgo::constants::deg2rad,
-        pva->height + pva->undulation).finished();
-      sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
-      sol.xyz_var = (gtsam::Vector3() << pva->latitude_stdev, pva->longitude_stdev, pva->height_stdev).finished();
-      sol.vel_n = (gtsam::Vector3() << pva->north_velocity, pva->east_velocity, -pva->up_velocity).finished();
-      //sol.vel_var = (gtsam::Vector3() << pva->north_velocity_stdev, pva->east_velocity_stdev, -pva->up_velocity_stdev).finished();
-      const auto eRned = gtsam::Rot3(fgo::utils::nedRe_Matrix(sol.xyz_ecef)).inverse();
-      sol.vel_ecef = eRned.rotate(sol.vel_n);
-      sol.rot_n = gtsam::Rot3::Yaw(pva->azimuth * fgo::constants::deg2rad);
 
-      sol.rot_ecef = eRned.compose(sol.rot_n);
 
-      sol.rot_var = (gtsam::Vector3() << pva->azimuth_stdev * fgo::constants::deg2rad,
-        pva->roll_stdev * fgo::constants::deg2rad,
-        pva->pitch_stdev * fgo::constants::deg2rad).finished();
-      sol.heading = -pva->azimuth * fgo::constants::deg2rad;
-      sol.has_heading = true;
-      sol.has_velocity = true;
-      sol.has_roll_pitch = true;
+      const auto [sol, state] = sensor::gnss::parseINSPVAXMsg(*pva,
+                                                              msg_timestamp,
+                                                              transSensorFromBase.translation());
       GNSSPVABuffer_.update_buffer(sol, msg_timestamp);
       if (paramPtr_->useForInitialization && !graphPtr_->isGraphInitialized()) {
         graphPtr_->updateReferenceMeasurementTimestamp(sol.tow, msg_timestamp);
@@ -455,29 +399,15 @@ namespace fgo::integrator {
 
     void onOEM7PVTMsgCb(const novatel_oem7_msgs::msg::BESTPOS::ConstSharedPtr bestpos,
                         const novatel_oem7_msgs::msg::BESTVEL::ConstSharedPtr bestvel) {
+      static const auto transSensorFromBase = sensorCalibManager_->getTransformationFromBase(sensorName_);
       rclcpp::Time msg_timestamp;
       if (paramPtr_->useHeaderTimestamp)
         msg_timestamp = rclcpp::Time(bestpos->header.stamp.sec, bestpos->header.stamp.nanosec, RCL_ROS_TIME);
       else
         msg_timestamp = rclcpp::Time(rosNodePtr_->now(), RCL_ROS_TIME);
-      fgo::data::PVASolution sol{};
-      sol.timestamp = msg_timestamp;
-      sol.tow = bestpos->nov_header.gps_week_milliseconds * 0.001;
-      sol.has_heading = false;
-      sol.has_velocity = true;
-      sol.llh = (gtsam::Vector3() << bestpos->lat * fgo::constants::deg2rad,
-        bestpos->lon * fgo::constants::deg2rad,
-        bestpos->hgt + bestpos->undulation).finished();
-      sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
-      sol.xyz_var = (gtsam::Vector3() << std::pow(bestpos->lat_stdev, 2), std::pow(bestpos->lon_stdev, 2), std::pow(
-        bestpos->hgt_stdev, 2)).finished();
-      const auto ecef_R_ned = gtsam::Rot3(fgo::utils::nedRe_Matrix(sol.xyz_ecef).inverse());
-      sol.vel_n = (gtsam::Vector3() << bestvel->hor_speed * std::cos(bestvel->trk_gnd * fgo::constants::deg2rad),
-        bestvel->hor_speed * std::sin(bestvel->trk_gnd * fgo::constants::deg2rad),
-        -bestvel->ver_speed).finished();
-      sol.vel_ecef = ecef_R_ned.rotate(sol.vel_n);
-      sol.type = fgo::utils::GNSS::getOEM7PVTSolutionType(bestpos->pos_type.type);
-      sol.num_sat = bestpos->num_sol_svs;
+
+      const auto [sol, state] = sensor::gnss::parseNovAtelPVT(*bestpos, *bestvel,
+                                                              msg_timestamp, transSensorFromBase.translation());
       GNSSPVABuffer_.update_buffer(sol, msg_timestamp);
       if (paramPtr_->useForInitialization && !graphPtr_->isGraphInitialized()) {
         graphPtr_->updateReferenceMeasurementTimestamp(sol.tow, msg_timestamp);
@@ -486,26 +416,13 @@ namespace fgo::integrator {
     }
 
     void onOEM7Bestpos(const novatel_oem7_msgs::msg::BESTPOS::ConstSharedPtr bestpos) {
+      static const auto transSensorFromBase = sensorCalibManager_->getTransformationFromBase(sensorName_);
       rclcpp::Time msg_timestamp;
       if (paramPtr_->useHeaderTimestamp)
         msg_timestamp = rclcpp::Time(bestpos->header.stamp.sec, bestpos->header.stamp.nanosec, RCL_ROS_TIME);
       else
         msg_timestamp = rclcpp::Time(rosNodePtr_->now(), RCL_ROS_TIME);
-      fgo::data::PVASolution sol{};
-      sol.timestamp = msg_timestamp;
-      sol.tow = bestpos->nov_header.gps_week_milliseconds * 0.001;
-      sol.has_heading = false;
-      sol.has_velocity = false;
-      sol.llh = (gtsam::Vector3() << bestpos->lat * fgo::constants::deg2rad,
-        bestpos->lon * fgo::constants::deg2rad,
-        bestpos->hgt + bestpos->undulation).finished();
-      sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
-      sol.xyz_var = (gtsam::Vector3() << std::pow(bestpos->lat_stdev, 2), std::pow(bestpos->lon_stdev, 2), std::pow(
-        bestpos->hgt_stdev, 2)).finished();
-
-      //auto ecef_R_ned = gtsam::Rot3(fgo::utils::nedRe_Matrix(sol.xyz_ecef).inverse());
-      sol.type = fgo::utils::GNSS::getOEM7PVTSolutionType(bestpos->pos_type.type);
-      sol.num_sat = bestpos->num_sol_svs;
+      const auto [sol, state] = sensor::gnss::parseNovAtelBestpos(*bestpos, msg_timestamp, transSensorFromBase.translation());
       GNSSPVABuffer_.update_buffer(sol, msg_timestamp);
       if (paramPtr_->useForInitialization && !graphPtr_->isGraphInitialized()) {
         graphPtr_->updateReferenceMeasurementTimestamp(sol.tow, msg_timestamp);
@@ -515,41 +432,17 @@ namespace fgo::integrator {
 
     void onUbloxPVTMsgCb(const ublox_msgs::msg::NavPVT::ConstSharedPtr navpvt) {
 
+      static const auto transSensorFromBase = sensorCalibManager_->getTransformationFromBase(sensorName_);
       static size_t calcZeroVelocityCounter = 1;
       static gtsam::Vector3 sumVelocity = gtsam::Z_3x1;
-      rclcpp::Time msg_timestamp = rclcpp::Time(rosNodePtr_->now(), RCL_ROS_TIME);
+      const auto now = rosNodePtr_->now();
+      rclcpp::Time msg_timestamp = rclcpp::Time(now.nanoseconds(), RCL_ROS_TIME);
       RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "on ubloxPVT at " << std::fixed << msg_timestamp.seconds());
-      fgo::data::PVASolution sol{};
-      sol.timestamp = msg_timestamp;
-      sol.tow = navpvt->i_tow * 0.001;
-      sol.has_velocity = true;
-      sol.has_heading = true;
-      sol.llh = (gtsam::Vector3() << navpvt->lat * 1e-7 * fgo::constants::deg2rad,
-        navpvt->lon * 1e-7 * fgo::constants::deg2rad,
-        navpvt->height * 1e-3).finished();
-      sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
-      sol.xyz_var = (gtsam::Vector3() << std::pow(navpvt->h_acc * 1e-3, 2), std::pow(navpvt->h_acc * 1e-3, 2), std::pow(
-        navpvt->v_acc * 1e-3, 2)).finished();
-      sol.vel_n = (gtsam::Vector3() << navpvt->vel_n * 1e-3, navpvt->vel_e * 1e-3, navpvt->vel_d * 1e-3).finished();
-      const auto ecef_R_ned = gtsam::Rot3(fgo::utils::nedRe_Matrix(sol.xyz_ecef)).inverse();
 
+      const auto [sol, state] = sensor::gnss::parseUbloxPVTMsg(*navpvt,
+                                                               paramPtr_,
+                                                               msg_timestamp);
       sumVelocity += sol.vel_n;
-      //sol.xyz_var = ecef_R_ned.rotate(sol.xyz_var);
-      sol.vel_ecef = ecef_R_ned.rotate(sol.vel_n);
-      const auto velVar = std::pow(navpvt->s_acc * 1e-3, 2);
-      sol.vel_var = (gtsam::Vector3() << velVar, velVar, velVar).finished();
-      //sol.vel_var = ecef_R_ned.rotate(sol.vel_var);
-      const auto heading = navpvt->heading * 1e-5 + paramPtr_->heading_offset_deg;
-      if (heading > 360.)
-        sol.heading = (heading - 360.) * fgo::constants::deg2rad;
-      else
-        sol.heading = heading * fgo::constants::deg2rad;
-      sol.rot_n = gtsam::Rot3::Yaw(sol.heading);
-      sol.heading_ecef = ecef_R_ned.compose(sol.rot_n).yaw();
-      sol.heading_var = std::pow(navpvt->head_acc * 1e-5 * fgo::constants::deg2rad, 2);
-      sol.rot_var = (gtsam::Vector3() << 0, 0., sol.heading_var).finished();
-      sol.type = fgo::utils::GNSS::getUbloxSolutionType(navpvt->fix_type, navpvt->flags);
-      sol.num_sat = navpvt->num_sv;
       GNSSPVABuffer_.update_buffer(sol, msg_timestamp);
 
       if (calcZeroVelocityCounter > 6) {
@@ -558,8 +451,7 @@ namespace fgo::integrator {
           sumVelocity.z() / calcZeroVelocityCounter).finished();
         //RCLCPP_ERROR_STREAM(appPtr_->get_logger(), integratorName_ << " avg: velocity " << avgVelocity.norm());
         if (avgVelocity.norm() < paramPtr_->zeroVelocityThreshold) {
-          RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(),
-                              integratorName_ << " onIRTPVTMsgCb reported near zero velocity: " << sol.vel_n);
+          //RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(), integratorName_ << " onIRTPVTMsgCb reported near zero velocity: " << sol.vel_n);
           zeroVelocity_ = true;
           GNSSPVABuffer_.clean();
         } else
@@ -568,40 +460,23 @@ namespace fgo::integrator {
 
         sumVelocity.setZero();
       }
-
-      calcZeroVelocityCounter++;
-
-      if (paramPtr_->useForInitialization && !graphPtr_->isGraphInitialized()) {
-        graphPtr_->updateReferenceMeasurementTimestamp(sol.tow, msg_timestamp);
-        RCLCPP_WARN(rosNodePtr_->get_logger(), "onUbloxPVTMsgCb: graph not initialized, waiting ...");
-      }
     }
 
     void onNavFixMsgCb(const sensor_msgs::msg::NavSatFix::ConstSharedPtr msg) {
+      static const auto transSensorFromBase = sensorCalibManager_->getTransformationFromBase(sensorName_);
       rclcpp::Time msg_timestamp;
       if (paramPtr_->useHeaderTimestamp)
         msg_timestamp = rclcpp::Time(msg->header.stamp.sec, msg->header.stamp.nanosec, RCL_ROS_TIME);
       else
         msg_timestamp = rclcpp::Time(rosNodePtr_->now(), RCL_ROS_TIME);
-      fgo::data::PVASolution sol{};
-      sol.timestamp = msg_timestamp;
-      sol.llh = (gtsam::Vector3() << msg->latitude * fgo::constants::deg2rad,
-        msg->longitude * fgo::constants::deg2rad,
-        msg->altitude).finished();
-      sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
-      sol.type = data::GNSSSolutionType::SINGLE;
+      const auto [sol, state] = sensor::gnss::parseNavFixMsg(*msg, msg_timestamp, transSensorFromBase.translation());
       GNSSPVABuffer_.update_buffer(sol, msg_timestamp);
-
-
       if (paramPtr_->useForInitialization && !graphPtr_->isGraphInitialized()) {
         graphPtr_->updateReferenceMeasurementTimestamp(sol.tow, msg_timestamp);
         RCLCPP_WARN(rosNodePtr_->get_logger(), "onNavFixMsgCb: graph not initialized, waiting ...");
       }
     }
-
-
   };
-
 }
 
 #endif //ONLINE_FGO_INTEGRATEGNSSLC_H
