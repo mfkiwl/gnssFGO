@@ -1,0 +1,23 @@
+services:
+  ros:
+    image: haomingac/gnssfgo:latest
+    container_name: gnssfgo
+    # network_mode: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    volumes:
+      - ${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}
+      - ${HOME}/.ssh:/root/.ssh
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /mnt/DataSmall:/Data
+    environment:
+      DISPLAY: ${DISPLAY}
+      SSH_AUTH_SOCK: ${SSH_AUTH_SOCK}
+      QT_X11_NO_MITSHM: 1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
