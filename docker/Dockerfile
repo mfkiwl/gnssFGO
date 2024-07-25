@@ -70,7 +70,7 @@ RUN mkdir -p /workspace/fgo_ws/src \
 # this command will build above pkg (high time and memory usage)
 RUN cd /workspace/fgo_ws \
     && source /opt/ros/humble/setup.bash \
-    && colcon build 
+    && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 # final update gnssFGO
 RUN echo "source /workspace/mapviz_ws/install/setup.bash" >> ~/.bashrc \
