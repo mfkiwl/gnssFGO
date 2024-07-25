@@ -13,7 +13,7 @@ docker build -t irt/gnssfgo .
 
 ## OR download the docker image
 If you don't want to build you can download the example docker image here:
-```
+```bash
 docker pull haomingac/gnssfgo:latest
 ```
 
@@ -32,4 +32,9 @@ docker compose up -d
 6. You can access the container interactively:
 ```bash
 docker exec -it gnssfgo bash
+```
+
+If you got error on '' Authorization required, but no authorization protocol specified'', then start a terminal and run
+```bash
+xhost +
 ```

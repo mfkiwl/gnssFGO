@@ -1,9 +1,21 @@
 # gnssFGO: an online and time-centric factor graph optimization for GNSS/Multi-sensor vehicle localization
 
-## <span style="color:red">Currently, we are improving the project with more generalizations for e.g., sensor parameters and a docker image. Stay tuned.</span>.
+## Update 25.07.2024
+1. The docker is ready in the folder docker. More information, see README.md in the docker folder. 
+2. A docker image can be pulled from 
+```bash
+docker pull haomingac/gnssfgo:latest
+```
+3. Using docker compose is recommended for visualization tools.
+4. There are bring-up launches available: e.g., 
+```bash
+ros2 launch online_fgo aachen_lc_all.launch.py
+```
+5. Please download the dataset (see below) and change the bag path in the launch file.
+6. There is a mapviz configuration file in the launch folder that can be loaded
 
 ### Video Demonstration (click the figure):
-[![IMAGE ALT TEXT](http://img.youtube.com/vi/9R55uCCrNss/0.jpg)](http://www.youtube.com/watch?v=9R55uCCrNss "GNSS-FGO Video Demonstration")
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/JhxJc1NFN7g/0.jpg)](https://youtu.be/JhxJc1NFN7g "GNSS-FGO Video Demonstration")
 
 This is the official implementation of gnssFGO using the general framework onlineFGO based on GTSAM, in which a general time-centric factor graph optimization with continuous-time trajectory representation using Gaussian process regression for online applications is implemented. 
 The goal of this framework is to build a fundamental time-centric graph-optimization state estimator for online applications while doing research on:
