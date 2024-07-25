@@ -4,7 +4,7 @@ import launch.launch_description_sources
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
-from launch.substitutions import LaunchConfiguration, Command
+from launch.substitutions import LaunchConfiguration, Command, EnvironmentVariable
 from launch_ros.actions import Node
 from launch import LaunchDescription
 
@@ -161,6 +161,15 @@ def generate_launch_description():
     ### ROSBAG
     BAG_PATH = "/mnt/DataSmall/DELoco/fgo/nodelay/DUS"
     START_OFFSET = "1"
+    try:
+        if(EnvironmentVariable('BAG_PATH')):
+            BAG_PATH = EnvironmentVariable('BAG_PATH')
+        if(EnvironmentVariable('START_OFFSET')):
+            START_OFFSET = EnvironmentVariable('START_OFFSET')
+    except:
+        pass
+    print("Current bag path: ", BAG_PATH)
+    print("Current start offset: ", START_OFFSET)
 
     exec_play_rosbag = ExecuteProcess(
         cmd=[

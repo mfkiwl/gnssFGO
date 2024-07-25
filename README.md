@@ -12,7 +12,12 @@ docker pull haomingac/gnssfgo:latest
 ros2 launch online_fgo aachen_lc_all.launch.py
 ```
 5. Please download the dataset (see below) and change the bag path in the launch file.
-6. There is a mapviz configuration file in the launch folder that can be loaded
+   Or, you can set an env. variable
+```bash
+export BAG_PATH="path to bag"
+export START_OFFSET="xx"
+```
+6. There is a mapviz configuration file in the launch folder that can be loaded.
 
 ### Video Demonstration (click the figure):
 [![IMAGE ALT TEXT](http://img.youtube.com/vi/JhxJc1NFN7g/0.jpg)](https://youtu.be/JhxJc1NFN7g "GNSS-FGO Video Demonstration")
