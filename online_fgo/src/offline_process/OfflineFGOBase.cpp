@@ -25,7 +25,8 @@ namespace offline_process {
   int offline_process::OfflineFGOBase::deferred_sig_number_{-1};
 
   OfflineFGOBase::OfflineFGOBase(const std::string &name, const rclcpp::NodeOptions &opt)
-    : gnss_fgo::GNSSFGOLocalizationBase(name, opt) {
+    : gnss_fgo::GNSSFGOLocalizationBase(name, opt),
+      datasetLoader_("online_fgo", "fgo::dataset::DatasetBase") {
     RCLCPP_INFO(this->get_logger(), "---------------------  OfflineFGOBase initializing! --------------------- ");
 
     if (!this->initializeCommon()) {
@@ -70,13 +71,29 @@ namespace offline_process {
                                                            KeyboardHandler::KeyModifiers) { this->cb_kb_stop(); },
                                                     KeyboardHandler::KeyCode::ESCAPE)));
 
+    RCLCPP_INFO(this->get_logger(),
+                "---------------------  OfflineFGOBase initializing Database... --------------------- ");
+    utils::RosParameter<std::string> datasetName("Dataset.DatasetUsed", *this);
+    RCLCPP_INFO_STREAM(get_logger(), "OfflineFGOBase Dataset used is: " << datasetName.value());
+    if (datasetLoader_.isClassAvailable(datasetName.value())) {
+      RCLCPP_INFO_STREAM(this->get_logger(),
+                         "OfflineFGOBase: initializing database: " << datasetName.value());
+      dataset_ = datasetLoader_.createSharedInstance(datasetName.value());
+      dataset_->initialize(datasetName.value(), *this, this->sensorCalibManager_);
+      RCLCPP_INFO_STREAM(this->get_logger(),
+                         "OfflineFGOBase: dataset: " << datasetName.value() << " initialized!");
+    } else {
+      RCLCPP_WARN_STREAM(this->get_logger(),
+                         "OfflineFGOBase: cannot find the plugin of dataset: " << datasetName.value());
+    }
+    RCLCPP_INFO(this->get_logger(),
+                "---------------------  OfflineFGOBase Database initialized! --------------------- ");
 
     RCLCPP_INFO(this->get_logger(), "---------------------  OfflineFGOBase initialized! --------------------- ");
   }
 
   OfflineFGOBase::~OfflineFGOBase() {
-    for(const auto& cb_pair : keyboard_callbacks_map_)
-    {
+    for (const auto &cb_pair: keyboard_callbacks_map_) {
       RCLCPP_INFO_STREAM(this->get_logger(), "OfflineFGO: deleting callback function " << cb_pair.first);
       keyboard_handler_->delete_key_press_callback(cb_pair.second);
     }
@@ -130,7 +147,8 @@ namespace offline_process {
     //publish
     fgoStateOptPub_->publish(this->convertFGOStateToMsg(lastOptimizedState_));
     fgoStateOptNavFixPub_->publish(
-      this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp, transReferenceFromBase.translation()));
+      this->convertPositionToNavFixMsg(lastOptimizedState_.state, lastOptimizedState_.timestamp,
+                                       transReferenceFromBase.translation()));
 
     // for an offline process, we firstly generate a state ids and timestamps map
 
@@ -161,7 +179,9 @@ namespace offline_process {
     const auto last_state_id_timestamp_pair = --state_id_timestamp_map.end();
     if (time_end < last_state_id_timestamp_pair->second)
       state_id_timestamp_map.insert(std::make_pair((--state_id_timestamp_map.end())->first + 1, time_start +
-                                                                                            (last_state_id_timestamp_pair->first + 1) * time_offset_state));
+                                                                                                (last_state_id_timestamp_pair->first +
+                                                                                                 1) *
+                                                                                                time_offset_state));
 
     RCLCPP_INFO_STREAM(this->get_logger(),
                        "OfflineFGO: State ID/Timestamp Map: totally " << state_id_timestamp_map.size()
@@ -299,16 +319,14 @@ namespace offline_process {
     }
   }
 
-  void OfflineFGOBase::propagate_imu(const std::vector<fgo::data::IMUMeasurement> &imus) {
+  void OfflineFGOBase::propagateIMU(const std::vector<fgo::data::IMUMeasurement> &imus) {
     static const auto transReferenceFromBase = sensorCalibManager_->getTransformationFromBase("reference");
 
     gtsam::Vector3 gravity_b = gtsam::Vector3::Zero();
     if (paramsPtr_->calibGravity) {
       const auto gravity = fgo::utils::gravity_ecef(currentPredState_.state.position());
       gravity_b = currentPredState_.state.attitude().unrotate(gravity);
-    }
-    else
-    {
+    } else {
       std::cout << "NOT CALCULATING GRAVITY" << std::endl;
     }
 
@@ -338,9 +356,11 @@ namespace offline_process {
       //currentPredState_.mutex.unlock();
       graph_->updatePredictedBuffer(currentPredState_);
       fgoPredStateBuffer_.update_buffer(currentPredState_, imu_meas.timestamp, this->get_clock()->now());
-      const auto navfixMsgRef = convertPositionToNavFixMsg(currentPredState_.state, currentPredState_.timestamp, transReferenceFromBase.translation());
+      const auto navfixMsgRef = convertPositionToNavFixMsg(currentPredState_.state, currentPredState_.timestamp,
+                                                           transReferenceFromBase.translation());
       const auto FGOStateMsg = this->convertFGOStateToMsg(currentPredState_);
-      const std::array<double, 2> llh_rad = {navfixMsgRef.latitude * fgo::constants::deg2rad, navfixMsgRef.longitude * fgo::constants::deg2rad};
+      const std::array<double, 2> llh_rad = {navfixMsgRef.latitude * fgo::constants::deg2rad,
+                                             navfixMsgRef.longitude * fgo::constants::deg2rad};
       fgo::data::UserEstimation_T userEstimation = {llh_rad[0], llh_rad[1],
                                                     navfixMsgRef.altitude, FGOStateMsg.cbd[0],
                                                     0., 0., 0.};

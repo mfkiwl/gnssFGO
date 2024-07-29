@@ -2,20 +2,24 @@
 /offline_process/learning_gp:
   ros__parameters:
     use_sim_time: true
-    Boreas:
-      bagPath: "/mnt/DataSmall/Boreas/ros2bag_boreas-2020-11-26-13-58/ros2bag_boreas-2020-11-26-13-58_0.db3"
-      maxMemoryFootprint: 2.
-      fullyLoadedTopics: [ "/boreas/gps_gt", "/boreas/gps_raw", "/boreas/imu/data", "/boreas/camera_pose", "/boreas/lidar_pose"]
-      excludedTopics: ["/boreas/compressed_image", "/boreas/velodyne_points", "/boreas/camera_pose", "/boreas/lidar_pose"]
-      #excludedTopics: [""]
-      autoLoading: True
-      startOffset: 0.
-      preDefinedDuration: 0.
+    Dataset:
+      DatasetUsed: "Boreas"
+      Boreas:
+        bagPath: "/mnt/DataSmall/Boreas/ros2bag_boreas-2020-11-26-13-58/ros2bag_boreas-2020-11-26-13-58_0.db3"
+        maxMemoryFootprint: 2.
+        excludedTopics: ["/boreas/compressed_image", "/boreas/velodyne_points", "/boreas/camera_pose", "/boreas/lidar_pose"]
+        #excludedTopics: [""]
+        autoLoading: True
+        startOffset: 0.
+        preDefinedDuration: 999.
+        sensors: ["imu", "reference", "gnss", "lidar"]
+        sensorTopics: ["/boreas/imu/data", "/boreas/gps_gt", "/boreas/gps_raw", "/boreas/lidar"]
+        fullyLoadedTopics: [ "/boreas/gps_gt", "/boreas/gps_raw", "/boreas/imu/data", "/boreas/camera_pose", "/boreas/lidar_pose"]
 
-    DELoco:
-      bagPath: "/mnt/SSDSmall/Boreas/ros2bag_boreas-2020-11-26-13-58"
-      maxMemoryFootprint: 4.
-      fullyLoadedTopics: [ "/imu/data", ]
-      autoLoading: True
-      startOffset: 0.
-      preDefinedDuration: 0.
+      DELoco:
+        bagPath: "/mnt/SSDSmall/Boreas/ros2bag_boreas-2020-11-26-13-58"
+        maxMemoryFootprint: 4.
+        fullyLoadedTopics: [ "/imu/data", ]
+        autoLoading: True
+        startOffset: 0.
+        preDefinedDuration: 0.

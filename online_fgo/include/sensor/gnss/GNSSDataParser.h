@@ -25,6 +25,7 @@
 #include <irt_nav_msgs/msg/gnss_obs_pre_processed.hpp>
 #include <irt_nav_msgs/msg/pva_geodetic.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <ublox_msgs/msg/nav_pvt.hpp>
 #include <ublox_msgs/msg/nav_clock.hpp>
@@ -235,7 +236,36 @@ namespace fgo::sensor::gnss {
       msg.longitude * fgo::constants::deg2rad,
       msg.altitude).finished();
     sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
-    sol.type = data::GNSSSolutionType::SINGLE;
+    sol.type = data::GNSSSolutionType::RTKFIX;
+    return {sol, PVASolutionToState(sol, leverArm)};
+  }
+
+  inline std::tuple<fgo::data::PVASolution, fgo::data::State> parseNavFixWithTwist(const sensor_msgs::msg::NavSatFix &fix,
+                                                                                   const geometry_msgs::msg::TwistStamped &twist,
+                                                                                   const rclcpp::Time &msg_timestamp,
+                                                                                   const gtsam::Vector3 &leverArm = gtsam::Vector3(),
+                                                                                   bool isENU=true) {
+    fgo::data::PVASolution sol{};
+    sol.timestamp = msg_timestamp;
+    sol.llh = (gtsam::Vector3() << fix.latitude * fgo::constants::deg2rad,
+      fix.longitude * fgo::constants::deg2rad,
+      fix.altitude).finished();
+    sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
+    sol.type = data::GNSSSolutionType::RTKFIX;
+    sol.has_velocity = true;
+
+    if(isENU)
+    {
+      sol.nRe = gtsam::Rot3(fgo::utils::enuRe_Matrix(sol.xyz_ecef));
+    }
+    else
+    {
+      sol.nRe = gtsam::Rot3(fgo::utils::nedRe_Matrix(sol.xyz_ecef));
+    }
+    sol.vel_n = (gtsam::Vector3()<<twist.twist.linear.x, twist.twist.linear.y, twist.twist.linear.z).finished();
+    sol.vel_ecef = sol.nRe.inverse().rotate(sol.vel_n);
+
+
     return {sol, PVASolutionToState(sol, leverArm)};
   }
 

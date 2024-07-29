@@ -181,6 +181,7 @@ add_subdirectory(src/integrator)
 add_subdirectory(src/data)
 add_subdirectory(src/graph)
 add_subdirectory(src/gnss_fgo)
+add_subdirectory(src/dataset)
 add_subdirectory(src/offline_process)
 
 
@@ -203,12 +204,13 @@ set(node_dep_ros  #ToDo @haoming check and clean this
         "rosbag2_cpp"
         "robognss_msgs"
 )
-#rclcpp_components_register_nodes(${ONLINEFGO_PREFIX}_gnssfgo "online_fgo::OnlineFGOGNSSINSIntegrationNode")
+
 add_subdirectory(src/node)
 
 # ************************** Install ********************************** #
 
-pluginlib_export_plugin_description_file(${PROJECT_NAME} integrator_ros_plugins.xml)
+pluginlib_export_plugin_description_file(${PROJECT_NAME} integrator_plugins.xml)
+pluginlib_export_plugin_description_file(${PROJECT_NAME} datasets_plugins.xml)
 ament_export_dependencies(${node_dep_ros})
 ament_export_include_directories(include/${PROJECT_NAME} include)
 ament_export_libraries(${ONLINEFGO_BUILD_TARGET})
@@ -228,7 +230,7 @@ install(TARGETS ${ONLINEFGO_BUILD_TARGET}
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME} FILES_MATCHING PATTERN "*.py")
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME} FILES_MATCHING PATTERN "*.launch")
-install(FILES integrator_ros_plugins.xml
+install(FILES integrator_plugins.xml
         DESTINATION share/${PROJECT_NAME}
 )
 install(DIRECTORY include/

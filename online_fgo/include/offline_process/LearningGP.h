@@ -26,8 +26,8 @@
 #pragma once
 
 #include "OfflineFGOBase.h"
-#include "dataset/DatasetBoreas.h"
-#include "dataset/DatasetDELoco.h"
+#include "include/dataset/impl/DatasetBoreas.h"
+#include "include/dataset/impl/DatasetDELoco.h"
 
 
 namespace offline_process {
@@ -35,28 +35,15 @@ namespace offline_process {
     using namespace fgo::graph;
     using namespace fgo::dataset;
 
-    struct LearningGPParam
-    {
-        std::string dataset;
-    };
-
     class LearningGP : public OfflineFGOBase {
     protected:
         //fgo::graph::GraphTimeCentric::Ptr graph_;
         fgo::data::State getPriorState() override;
         StatusGraphConstruction feedDataOffline(const std::vector<double>& stateTimestamps) override;
-
     public:
         //function
         explicit LearningGP(const rclcpp::NodeOptions &opt);
         ~LearningGP() override = default;
-
-    private:
-        std::unique_ptr<DatasetBoreas> data_boreas_;
-        std::unique_ptr<DatasetDELoco> data_deloco_;
-        StatusGraphConstruction feedDataBoreas(const std::vector<double>& stateTimestamps);
-        StatusGraphConstruction feedDataDELoco(const std::vector<double>& stateTimestamps);
-
     };
 
 }

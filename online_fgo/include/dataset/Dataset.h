@@ -41,8 +41,9 @@
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <robognss_msgs/msg/pvt.hpp>
 #include <utility>
-#include "sensor/gnss/GNSSDataParser.h"
 
+#include "sensor/gnss/GNSSDataParser.h"
+#include "integrator/param/IntegratorParams.h"
 #include "sensor/SensorCalibrationManager.h"
 #include "DatasetParam.h"
 #include "BagReader.h"
@@ -53,6 +54,10 @@
 
 //ToDo to be deleted
 #include "integrator/param/IntegratorParams.h"
+
+namespace offline_process {
+  class OfflineFGOBase;
+}
 
 namespace fgo::dataset {
   using namespace fgo::data;
@@ -70,6 +75,7 @@ namespace fgo::dataset {
     DataMap data;
     typename DataMap::iterator data_iter;
 
+    DataBlock() = default;
     explicit DataBlock(std::string name,
                        std::string topic,
                        double max_loading_size,
@@ -118,7 +124,7 @@ namespace fgo::dataset {
     }
 
     DataType getNextData() {
-      if(excluded)
+      if (excluded)
         return DataType();
 
       if (data_iter != data.end()) {
@@ -145,7 +151,7 @@ namespace fgo::dataset {
     std::vector<DataType> getDataBefore(const rclcpp::Time &timestamp,
                                         bool erase = false) {
       std::vector<DataType> measurement;
-      if(excluded)
+      if (excluded)
         return measurement;
       auto iter = data.begin();
 
@@ -178,7 +184,7 @@ namespace fgo::dataset {
     std::vector<DataType> getDataBetween(const rclcpp::Time &lastStateTime,
                                          const rclcpp::Time &currentStateTime) {
       std::vector<DataType> measurement;
-      if(excluded)
+      if (excluded)
         return measurement;
       bool findMeasurement = false;
       auto iter = data.begin();
@@ -217,95 +223,35 @@ namespace fgo::dataset {
     std::vector<State> reference_state;
   };
 
-  template<typename ReferenceType>
-  struct DatasetBase {
-    std::shared_ptr<DatasetParam> params_;
+  //template<typename PVASolution>
+  class DatasetBase {
+  public:
+    std::shared_ptr<DatasetParam> param_;
+    offline_process::OfflineFGOBase *appPtr_;
     std::string name;
     fgo::sensor::SensorCalibrationManager::Ptr sensor_calib_manager_;
     std::unique_ptr<BagReader> reader_;
     DataBlock<IMUMeasurement> data_imu;
     DataBlock<State> data_reference_state;
-    DataBlock<ReferenceType> data_reference;
+    DataBlock<PVASolution> data_reference;
 
     rclcpp::Time timestamp_start;
     rclcpp::Time timestamp_end;
     State prior_state;
 
-    const std::function<rclcpp::Time(const IMUMeasurement &)> imu_time_getter = IMUDataTimeGetter;
-    const std::function<rclcpp::Time(const State &)> state_time_getter = StateTimeGetter;
-    const std::function<rclcpp::Time(const ReferenceType &)> reference_time_getter = FGODataTimeGetter<ReferenceType>;
+    DatasetBase() {};
+    virtual ~DatasetBase() = default;
 
-
-    explicit DatasetBase(std::string name_,
-                         const std::shared_ptr<DatasetParam> &param,
-                         fgo::sensor::SensorCalibrationManager::Ptr sensor_calib_manager,
-                         std::string imu_topic = "/imu/data",
-                         std::string reference_topic = "/reference")
-      : params_(param),
-        name(std::move(name_)),
-        sensor_calib_manager_(sensor_calib_manager),
-        data_imu("IMU", std::move(imu_topic), 0., IMUDataTimeGetter),
-        data_reference_state("ReferenceState", "", 0., StateTimeGetter),
-        data_reference("Reference", reference_topic, 0., PVADataTimeGetter) {
-      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                         "OfflineFGO Dataset " << name << ": initializing DatasetBase ...");
-      reader_ = std::make_unique<BagReader>(params_);
-      reader_->readFullDataFromBag();
-      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                         "OfflineFGO Dataset " << name << ": DatasetBase initialized!");
-    }
+    virtual void initialize(std::string name_,
+                            offline_process::OfflineFGOBase &node,
+                            fgo::sensor::SensorCalibrationManager::Ptr sensor_calib_manager);
 
     // maybe unuseful
-    virtual data::State referenceToState(const ReferenceType &reference) {
+    virtual data::State referenceToState(const PVASolution &reference) {
       return data_reference_state.data.begin()->second;
     };
 
-    void setTimestampsFromReference(bool reset_first = false) {
-      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name
-                                                                                      << ": Setting start and end timestamps based on the reference data ...");
-      if (timestamp_start.nanoseconds() == 0 || reset_first) {
-        size_t first_pos = 0;
-        auto iter = data_reference.data.begin();
-        auto first_timestamp = iter->first;
-        iter = data_reference.data.erase(iter);
-        first_pos++;
-        if (params_->start_offset != 0.) {
-          while (iter != data_reference.data.end()) {
-            if ((iter->first - first_timestamp).seconds() >= params_->start_offset)
-              break;
-            iter = data_reference.data.erase(iter);
-            first_pos++;
-          }
-        }
-        first_timestamp = iter->first;
-        timestamp_start = first_timestamp;
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                           "OfflineFGO Dataset " << name << ": setting start time " << timestamp_start.seconds());
-        prior_state = referenceToState(iter->second);
-        const auto imu_data_vec = data_imu.getDataBefore(first_timestamp);
-        prior_state.omega = imu_data_vec.end()->gyro;
-        prior_state.accMeasured = (gtsam::Vector6()
-          << imu_data_vec.end()->accRot, imu_data_vec.end()->accLin).finished();
-
-        if (data_reference_state.data.size() > first_pos) {
-          auto eraseIter = data_reference_state.data.begin();
-          std::advance(eraseIter, first_pos);
-          data_reference_state.data.erase(data_reference_state.data.begin(), eraseIter);
-          data_reference_state.data_iter = data_reference_state.data.begin();
-        }
-      }
-
-      if (params_->pre_defined_duration == 0.) {
-        timestamp_end = (--data_reference.data.end())->first;
-      } else {
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                           "OfflineFGO Dataset " << name << ": setting the end time from parameter current");
-        timestamp_end = timestamp_start + rclcpp::Duration::from_nanoseconds(params_->pre_defined_duration * 1e9);
-      }
-      RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                         "OfflineFGO Dataset " << name << " started from " << std::fixed << timestamp_start.seconds()
-                                               << " end at " << timestamp_end.seconds());
-    }
+    void setTimestampsFromReference(bool reset_first = false);
 
     template<typename ROSMessageObject>
     std::tuple<rclcpp::Time, ROSMessageObject>
@@ -315,14 +261,33 @@ namespace fgo::dataset {
     }
 
     template<typename ROSMessageObject>
-    std::vector<std::pair<rclcpp::Time, ROSMessageObject>> readROSMessages(const std::string &topic) {
+    std::vector<std::pair<rclcpp::Time, ROSMessageObject>>
+    readROSMessages(const std::string &topic) {
       const auto raw = reader_->getAllMessageRAW(topic);
 
       std::vector<std::pair<rclcpp::Time, ROSMessageObject>> data;
       for (const auto &time_buffer_pair: raw) {
+
         auto [timestamp, msg] = reader_->deserialize_message<ROSMessageObject>(time_buffer_pair.second,
                                                                                time_buffer_pair.first);
         data.emplace_back(std::make_pair(timestamp, msg));
+
+      }
+      return data;
+    }
+
+    //TODo @Haoming: looks redundant
+    template<typename ROSMessageObject>
+    std::vector<std::pair<rclcpp::Time, ROSMessageObject>>
+    readROSMessagesNoHeader(const std::string &topic) {
+      const auto raw = reader_->getAllMessageRAW(topic);
+
+      std::vector<std::pair<rclcpp::Time, ROSMessageObject>> data;
+      for (const auto &time_buffer_pair: raw) {
+        auto [timestamp, msg] = reader_->deserialize_message_no_header<ROSMessageObject>(time_buffer_pair.second,
+                                                                                         time_buffer_pair.first);
+        data.emplace_back(std::make_pair(timestamp, msg));
+
       }
       return data;
     }
@@ -331,11 +296,13 @@ namespace fgo::dataset {
 
     virtual void trimDataBlocks() = 0;
 
+    virtual fgo::graph::StatusGraphConstruction feedDataToGraph(const std::vector<double> &stateTimestamps) = 0;
+
     IMUMeasurement getNextIMU() { return data_imu.getNextData(); }
 
     State getNextReferenceState() { return data_reference_state.getNextData(); }
 
-    ReferenceType getNextReference() { return data_reference.getNextData(); }
+    PVASolution getNextReference() { return data_reference.getNextData(); }
   };
 }
 

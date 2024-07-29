@@ -20,37 +20,19 @@
 // Created by haoming on 12.06.24.
 //
 
-#ifndef ONLINE_FGO_DATASETKITTI_H
-#define ONLINE_FGO_DATASETKITTI_H
-#pragma once
+#ifndef ONLINE_FGO_DATASETROBOTCAR_H
+#define ONLINE_FGO_DATASETROBOTCAR_H
+
 #include <ranges>
-#include <image_transport/image_transport/image_transport.hpp>
-#include <sensor_msgs/msg/image.hpp>
-#include <sensor_msgs/msg/nav_sat_fix.hpp>
-#include <robognss_msgs/msg/pvt.hpp>
-#include "Dataset.h"
-#include "sensor/gnss/RoboGNSSParser.h"
+
+#include "include/dataset/Dataset.h"
 
 namespace fgo::dataset {
-  using namespace fgo::data;
-
-  struct KittiDataBatch : DataBatch
-  {
-    std::vector<Pose> baseline_batch;
-    std::vector<StereoPair> stereo_pair_batch;
-  };
 
 
-
-  struct DatasetKitti : DatasetBase<PVASolution> {
-
-
-
-
-  };
 
 
 }
 
 
-#endif //ONLINE_FGO_DATASETKITTI_H
+#endif //ONLINE_FGO_DATASETROBOTCAR_H

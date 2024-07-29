@@ -21,8 +21,8 @@
 #pragma once
 
 #include "OfflineFGOBase.h"
-#include "dataset/DatasetPohang.h"
-#include "dataset/DatasetKitti.h"
+#include "include/dataset/impl/DatasetPohang.h"
+#include "include/dataset/impl/DatasetKitti.h"
 
 namespace offline_process {
   using namespace fgo::integrator;
@@ -32,27 +32,13 @@ namespace offline_process {
   class OfflineVisualFGO : public OfflineFGOBase {
   public:
     explicit OfflineVisualFGO(const rclcpp::NodeOptions &opt);
-
     ~OfflineVisualFGO() override = default;
 
   protected:
     fgo::data::State getPriorState() override;
-
     StatusGraphConstruction feedDataOffline(const std::vector<double> &stateTimestamps) override;
 
-  private:
-    std::unique_ptr<DatasetPohang> data_pohang_;
-
-    //std::unique_ptr<DatasetKittiOdom> data_kitti_;
-    StatusGraphConstruction feedDataPohang(const std::vector<double> &stateTimestamps);
-    // StatusGraphConstruction feedDataKittiOdom(const std::vector<double>& stateTimestamps);
-
-
-
-
   };
-
-
 }
 
 

@@ -10,7 +10,6 @@
         integratorPlugin: "GNSSLCIntegrator"
         sensorName: "gnss"
         notIntegrating: false
-        odomPVATopic: "/boreas/gps_raw"
         useForInitialization: true
         useHeaderTimestamp: true
         GNSSMeasurementFrequency: 200

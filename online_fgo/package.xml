@@ -47,6 +47,7 @@
 
   <export>
     <build_type>ament_cmake</build_type>
-    <online_fgo plugin="${prefix}/integrator_ros_plugins.xml"/>
+    <online_fgo plugin="${prefix}/integrator_plugins.xml"/>
+    <online_fgo plugin="${prefix}/datasets_plugins.xml"/>
   </export>
 </package>

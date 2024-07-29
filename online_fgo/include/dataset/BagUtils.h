@@ -47,7 +47,7 @@
 namespace fgo::data {
   enum class DataType : unsigned int {
     IMU = 1,
-    IRTPVAGeodetic = 2,
+    PVASolution = 2,
     NavFix = 3,
     Odometry = 4,
     NovAtelINSPVA = 5,
@@ -60,7 +60,7 @@ namespace fgo::data {
 
   const std::map<DataType, std::string> TypeMessageDict =
     {
-      {DataType::IRTPVAGeodetic,         "IRTPVAGeodetic"},
+      {DataType::PVASolution,            "IRTPVAGeodetic"},
       {DataType::Odometry,               "Odometry"},
       {DataType::NovAtelINSPVA,          "NovAtelINSPVA"},
       {DataType::IRTGNSSObsPreProcessed, "IRTGNSSObsPreProcessed"},
@@ -75,7 +75,7 @@ namespace fgo::data {
   const std::map<std::string, DataType> MessageTypeDict =
     {
       {"IMU",                    DataType::IMU},
-      {"IRTPVAGeodetic",         DataType::IRTPVAGeodetic},
+      {"IRTPVAGeodetic",         DataType::PVASolution},
       {"Odometry",               DataType::Odometry},
       {"NovAtelINSPVA",          DataType::NovAtelINSPVA},
       {"IRTGNSSObsPreProcessed", DataType::IRTGNSSObsPreProcessed},
@@ -115,7 +115,7 @@ namespace fgo::data {
 
   };
 
-  inline fgo::data::Pose msg2FGOPose(const geometry_msgs::msg::PoseStamped &poseMsg) {
+  inline fgo::data::Pose convertPoseStampedToFGOPose(const geometry_msgs::msg::PoseStamped &poseMsg) {
     data::Pose pose;
     pose.timestamp = rclcpp::Time(poseMsg.header.stamp.sec, poseMsg.header.stamp.nanosec, RCL_ROS_TIME);
     pose.pose = gtsam::Pose3(
@@ -126,9 +126,9 @@ namespace fgo::data {
     return pose;
   }
 
-  inline IMUMeasurement msg2IMUMeasurement(const sensor_msgs::msg::Imu &imuMsg,
-                                           const rclcpp::Time &timestamp,
-                                           const gtsam::Matrix33 &trans = gtsam::Matrix33::Identity()) {
+  inline IMUMeasurement convertIMUMsgToIMUMeasurement(const sensor_msgs::msg::Imu &imuMsg,
+                                                      const rclcpp::Time &timestamp,
+                                                      const gtsam::Matrix33 &trans = gtsam::Matrix33::Identity()) {
     static bool first_msg = true;
     static auto last_timestamp = timestamp;
     static auto last_gyro = gtsam::Vector3();
@@ -140,7 +140,7 @@ namespace fgo::data {
 
     imuMeasurement.accLin = trans * imuMeasurement.accLin;
 
-    imuMeasurement.accLinCov = gtsam::Matrix33(imuMsg.linear_acceleration_covariance.data());
+    imuMeasurement.accLinCov = trans * gtsam::Matrix33(imuMsg.linear_acceleration_covariance.data());
     imuMeasurement.AHRSOri = gtsam::Rot3(imuMsg.orientation.w, imuMsg.orientation.x, imuMsg.orientation.y,
                                          imuMsg.orientation.z);
     imuMeasurement.AHRSOri = gtsam::Rot3(trans * imuMeasurement.AHRSOri.matrix());
@@ -149,8 +149,8 @@ namespace fgo::data {
     imuMeasurement.gyro.z() = imuMsg.angular_velocity.z;
 
     imuMeasurement.gyro = trans * imuMeasurement.gyro;
-    imuMeasurement.gyroCov = gtsam::Matrix33(imuMsg.angular_velocity_covariance.data());
-    imuMeasurement.AHRSOriCov = gtsam::Matrix33(imuMsg.orientation_covariance.data());
+    imuMeasurement.gyroCov = trans * gtsam::Matrix33(imuMsg.angular_velocity_covariance.data());
+    imuMeasurement.AHRSOriCov = trans * gtsam::Matrix33(imuMsg.orientation_covariance.data());
     //dt and accrot
     if (!first_msg) {
       imuMeasurement.dt = imuMeasurement.timestamp.seconds() - last_timestamp.seconds();
@@ -174,7 +174,7 @@ namespace fgo::data {
     using Type = sensor_msgs::msg::NavSatFix;
   };
   template<>
-  struct ROSMessageTypeTranslator<DataType::IRTPVAGeodetic> {
+  struct ROSMessageTypeTranslator<DataType::PVASolution> {
     using Type = irt_nav_msgs::msg::PVAGeodetic;
   };
   template<>

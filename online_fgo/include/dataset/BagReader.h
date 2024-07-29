@@ -36,6 +36,7 @@
 #include <rosbag2_cpp/converter_options.hpp>
 #include <ublox_msgs/msg/rxm_rawx.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <tf2_msgs/msg/tf_message.hpp>
 
 //#include "utils/indicators/indicators.hpp"
 //#include "sensor/gnss/GNSSDataParser.h"
@@ -81,14 +82,20 @@ namespace fgo::dataset {
       rclcpp::SerializedMessage extracted_serialized_msg(*data);
       serialization.deserialize_message(
         &extracted_serialized_msg, &new_msg);
-      try {
         auto ros_timestamp = rclcpp::Time(new_msg.header.stamp.sec, new_msg.header.stamp.nanosec, RCL_ROS_TIME);
         return {ros_timestamp, new_msg};
-      }
-      catch (std::exception &ex) {
-        const auto ros_timestamp = rclcpp::Time(bagtime, RCL_ROS_TIME);
-        return {ros_timestamp, new_msg};
-      }
+    }
+
+    template<typename T>
+    std::tuple<rclcpp::Time, T> deserialize_message_no_header(std::shared_ptr<rcutils_uint8_array_t> data,
+                                                    uint64_t bagtime) {
+      T new_msg;
+      rclcpp::Serialization<T> serialization;
+      rclcpp::SerializedMessage extracted_serialized_msg(*data);
+      serialization.deserialize_message(
+        &extracted_serialized_msg, &new_msg);
+      const auto ros_timestamp = rclcpp::Time(bagtime, RCL_ROS_TIME);
+      return {ros_timestamp, new_msg};
     }
 
     //constructor: initial with Path of bag file and the topics of gnss and IMU

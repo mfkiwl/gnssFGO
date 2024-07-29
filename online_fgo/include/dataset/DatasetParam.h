@@ -35,34 +35,46 @@ namespace fgo::dataset {
     double max_bag_memory_usage = 4.; // in GB,
     std::vector<std::string> bag_fully_loaded_topics;
     std::vector<std::string> excluded_topics;
+    std::map<std::string, std::string> sensor_topic_map;
     bool autoLoading = false;
     double start_offset = 0.;
     double pre_defined_duration = 0.;
 
     std::map<std::string, fgo::data::DataType> topic_type_map;
 
-    DatasetParam(rclcpp::Node &node, const std::string &dataset_name) {
-      ::utils::RosParameter<std::string> bag_path_(dataset_name + ".bagPath", node);
+    DatasetParam(rclcpp::Node *node, const std::string &dataset_name) {
+      ::utils::RosParameter<std::string> bag_path_("Dataset." + dataset_name + ".bagPath", *node);
       this->bag_path = bag_path_.value();
 
-      ::utils::RosParameter<double> max_bag_memory_usage_(dataset_name + ".maxMemoryFootprint", node);
+      ::utils::RosParameter<double> max_bag_memory_usage_("Dataset." + dataset_name + ".maxMemoryFootprint", *node);
       this->max_bag_memory_usage = max_bag_memory_usage_.value();
 
-      ::utils::RosParameter<std::vector<std::string>> bag_topic_filter_(dataset_name + ".fullyLoadedTopics", node);
+      ::utils::RosParameter<std::vector<std::string>> sensors("Dataset." + dataset_name + ".sensors", *node);
+      const auto &sensors_ = sensors.value();
+      ::utils::RosParameter<std::vector<std::string>> sensor_topics("Dataset." + dataset_name + ".sensorTopics", *node);
+      const auto &sensor_topics_ = sensor_topics.value();
+      if (sensors_.size() == sensor_topics_.size()) {
+        for (size_t i = 0; i < sensors_.size(); i++)
+          sensor_topic_map.insert(std::make_pair(sensors_[i], sensor_topics_[i]));
+      } else
+        throw std::invalid_argument("DatasetParam: sensors and sensor topics of dataset" + dataset_name + " do not match!");
+
+      ::utils::RosParameter<std::vector<std::string>> bag_topic_filter_(
+        "Dataset." + dataset_name + ".fullyLoadedTopics", *node);
       this->bag_fully_loaded_topics = bag_topic_filter_.value();
 
-      ::utils::RosParameter<std::vector<std::string>> excludedTopics_(dataset_name + ".excludedTopics", node);
+      ::utils::RosParameter<std::vector<std::string>> excludedTopics_("Dataset." + dataset_name + ".excludedTopics",
+                                                                      *node);
       this->excluded_topics = excludedTopics_.value();
 
-      ::utils::RosParameter<bool> autoLoading_(dataset_name + ".autoLoading", true, node);
+      ::utils::RosParameter<bool> autoLoading_("Dataset." + dataset_name + ".autoLoading", true, *node);
       this->autoLoading = autoLoading_.value();
 
-      ::utils::RosParameter<double> start_offset_(dataset_name + ".startOffset", 0., node);
+      ::utils::RosParameter<double> start_offset_("Dataset." + dataset_name + ".startOffset", 0., *node);
       this->start_offset = start_offset_.value();
 
-      ::utils::RosParameter<double> pre_defined_duration_(dataset_name + ".preDefinedDuration", node);
+      ::utils::RosParameter<double> pre_defined_duration_("Dataset." + dataset_name + ".preDefinedDuration", *node);
       this->pre_defined_duration = pre_defined_duration_.value();
-
     }
   };
 }

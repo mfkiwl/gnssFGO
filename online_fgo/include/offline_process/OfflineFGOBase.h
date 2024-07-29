@@ -30,6 +30,7 @@
 #include <keyboard_handler/keyboard_handler.hpp>
 
 #include "gnss_fgo/GNSSFGOLocalizationBase.h"
+#include "dataset/Dataset.h"
 //#include "utils/indicators/indicators.hpp"
 
 namespace offline_process {
@@ -74,6 +75,13 @@ namespace offline_process {
 
     ~OfflineFGOBase() override;
 
+    void updateReferenceBuffer(const std::vector<fgo::data::PVASolution> &reference)
+    {
+      for (const auto &pva: reference)
+        referenceBuffer_.update_buffer(pva, pva.timestamp);
+    }
+
+    void propagateIMU(const std::vector<fgo::data::IMUMeasurement> &imus);
 
   protected:
 
@@ -135,8 +143,6 @@ namespace offline_process {
 
     virtual fgo::graph::StatusGraphConstruction feedDataOffline(const StateTimestamps_t &stateTimestamps) {};
 
-
-  protected:
     void cb_kb_start_pause();
 
     void cb_kb_step();
@@ -151,8 +157,6 @@ namespace offline_process {
         timestamps.emplace_back(id_timestamp_pair.second);
       return timestamps;
     }
-
-    void propagate_imu(const std::vector<fgo::data::IMUMeasurement> &imus);
 
   private:
     std::condition_variable opt_condition_;
@@ -170,6 +174,8 @@ namespace offline_process {
     static SignalHandlerType old_sigint_handler_;
     static SignalHandlerType old_sigterm_handler_;
     static int deferred_sig_number_;
+    pluginlib::ClassLoader<fgo::dataset::DatasetBase> datasetLoader_; ///< Plugin loader
+    std::shared_ptr<fgo::dataset::DatasetBase> dataset_;
 
 
   };

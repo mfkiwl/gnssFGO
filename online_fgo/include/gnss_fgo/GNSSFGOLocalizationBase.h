@@ -105,6 +105,7 @@ namespace gnss_fgo
             initFGOThread_->join();
         };
         GNSSFGOParamsPtr getParamPtr() {return paramsPtr_;}
+        fgo::graph::GraphBase::Ptr getGraphPtr() const {return graph_;}
 
     protected:
         friend class fgo::graph::GraphBase;

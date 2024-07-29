@@ -17,10 +17,15 @@
 //
 
 //
-// Created by haoming on 12.06.24.
+// Created by haoming on 22.05.24.
 //
 
-#ifndef ONLINE_FGO_DATASETROBOTCAR_H
-#define ONLINE_FGO_DATASETROBOTCAR_H
+#include "dataset/impl/DatasetRobotcar.h"
+#include "offline_process/OfflineFGOBase.h"
+namespace fgo::dataset {
 
-#endif //ONLINE_FGO_DATASETROBOTCAR_H
+}
+
+#include <pluginlib/class_list_macros.hpp>
+//PLUGINLIB_EXPORT_CLASS(fgo::dataset::DatasetRobotcar, fgo::dataset::DatasetBase)
+
