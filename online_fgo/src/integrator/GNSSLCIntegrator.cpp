@@ -388,8 +388,8 @@ namespace fgo::integrator {
 
       //std::cout << "current pos var: " << pvaIter->xyz_var * posVarScale << std::endl;
       //std::cout << "current pos var: " << pvaIter->vel_var * velVarScale << std::endl;
-      //std::cout << "ecef: " << pvaIter->xyz_ecef << std::endl;
-      //std::cout << "vel_n: " << pvaIter->vel_n << std::endl;
+      std::cout << "GNSSLC ecef: " << std::fixed <<pvaIter->xyz_ecef << std::endl;
+      std::cout << "vel_n: " << pvaIter->vel_n << std::endl;
 
       auto syncResult = findStateForMeasurement(currentKeyIndexTimestampMap, corrected_time, paramPtr_);
       const auto current_pred_state = timePredStates.back().second; //graph::querryCurrentPredictedState(timePredStates, corrected_time);

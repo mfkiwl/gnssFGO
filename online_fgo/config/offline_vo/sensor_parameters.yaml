@@ -2,9 +2,9 @@
 /offline_process/vo:
   ros__parameters:
     GNSSFGO:
-      VehicleParameterPrefix: "Pohang04"
+      VehicleParameterPrefix: "Pohang_04"
 
-    Pohang04:
+    Pohang_04:   #04
       VehicleParameters:
         baseFrame: "imu"
         sensors: [ "imu", "reference", "gnss", "lidar_front", "stereo_left", "stereo_right", "radar_low", "radar_high", "infrared"]
@@ -12,8 +12,8 @@
           preRotate: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
 
         reference:
-          transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
-          rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
+          transFromBase: [ 0., 0., 0.]
+          rotFromBase: [ 0., 0., 0. ]
 
         gnss:
           transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
@@ -51,10 +51,10 @@
           preRotate: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
 
         reference:
-          transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
-          rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
+          transFromBase: [ 0., 0., 0. ]
+          rotFromBase: [ 0., 0., 0. ]
 
-        gps:
+        gnss:
           transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
           rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
 
@@ -90,10 +90,10 @@
           preRotate: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
 
         reference:
-          transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
-          rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
+          transFromBase: [ 0., 0., 0. ]
+          rotFromBase: [ 0., 0., 0. ]
 
-        gps:
+        gnss:
           transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
           rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
 
@@ -129,10 +129,10 @@
           preRotate: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
 
         reference:
-          transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
-          rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
+          transFromBase: [ 0., 0., 0. ]
+          rotFromBase: [ 0., 0., 0. ]
 
-        gps:
+        gnss:
           transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
           rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
 
@@ -168,10 +168,10 @@
           preRotate: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
 
         reference:
-          transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
-          rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
+          transFromBase: [ 0., 0., 0. ]
+          rotFromBase: [ 0., 0., 0. ]
 
-        gps:
+        gnss:
           transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
           rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
 
@@ -207,10 +207,10 @@
           preRotate: [ 1., 0., 0., 0., 1., 0., 0., 0., 1. ]
 
         reference:
-          transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
-          rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
+          transFromBase: [ 0., 0., 0. ]
+          rotFromBase: [ 0., 0., 0. ]
 
-        gps:
+        gnss:
           transFromBase: [ 5.2372448599999997, -0.026214491999999999, -1.924742161 ]
           rotFromBase: [ 0.99994147645540532, 0., 0., -0.010818672015746473, ]
 

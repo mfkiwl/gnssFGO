@@ -37,14 +37,19 @@ namespace fgo::dataset {
     std::vector<std::string> excluded_topics;
     std::map<std::string, std::string> sensor_topic_map;
     bool autoLoading = false;
+    bool onlyDataPlaying = false;
     double start_offset = 0.;
     double pre_defined_duration = 0.;
+    std::string bag_format = "sqlite";
 
     std::map<std::string, fgo::data::DataType> topic_type_map;
 
     DatasetParam(rclcpp::Node *node, const std::string &dataset_name) {
       ::utils::RosParameter<std::string> bag_path_("Dataset." + dataset_name + ".bagPath", *node);
       this->bag_path = bag_path_.value();
+
+      ::utils::RosParameter<std::string> bag_format_("Dataset." + dataset_name + ".bagFormate", *node);
+      this->bag_format = bag_format_.value();
 
       ::utils::RosParameter<double> max_bag_memory_usage_("Dataset." + dataset_name + ".maxMemoryFootprint", *node);
       this->max_bag_memory_usage = max_bag_memory_usage_.value();
@@ -69,6 +74,9 @@ namespace fgo::dataset {
 
       ::utils::RosParameter<bool> autoLoading_("Dataset." + dataset_name + ".autoLoading", true, *node);
       this->autoLoading = autoLoading_.value();
+
+      ::utils::RosParameter<bool> onlyData("Dataset." + dataset_name + ".onlyDataPlaying", false, *node);
+      this->onlyDataPlaying = onlyData.value();
 
       ::utils::RosParameter<double> start_offset_("Dataset." + dataset_name + ".startOffset", 0., *node);
       this->start_offset = start_offset_.value();

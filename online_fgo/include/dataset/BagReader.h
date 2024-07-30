@@ -119,7 +119,7 @@ namespace fgo::dataset {
       auto reader = std::make_shared<rosbag2_cpp::readers::SequentialReader>();
       rosbag2_storage::StorageOptions storage_options;
       storage_options.uri = param_->bag_path;
-      storage_options.storage_id = "sqlite3";
+      storage_options.storage_id = param_->bag_format;
       rosbag2_cpp::ConverterOptions converter_options;
       converter_options.input_serialization_format = "cdr";
       converter_options.output_serialization_format = "cdr";
@@ -179,7 +179,7 @@ namespace fgo::dataset {
       rosbag2_cpp::readers::SequentialReader reader;
       rosbag2_storage::StorageOptions storage_options{};
       storage_options.uri = param_->bag_path;
-      storage_options.storage_id = "sqlite3";
+      storage_options.storage_id = param_->bag_format;
       rosbag2_cpp::ConverterOptions converter_options{};
       converter_options.input_serialization_format = "cdr";
       converter_options.output_serialization_format = "cdr";
@@ -215,7 +215,7 @@ namespace fgo::dataset {
       const auto reader = std::make_unique<rosbag2_cpp::readers::SequentialReader>();
       rosbag2_storage::StorageOptions storage_options{};
       storage_options.uri = param_->bag_path;
-      storage_options.storage_id = "sqlite3";
+      storage_options.storage_id = param_->bag_format;
       rosbag2_cpp::ConverterOptions converter_options{};
       converter_options.input_serialization_format = "cdr";
       converter_options.output_serialization_format = "cdr";

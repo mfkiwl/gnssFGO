@@ -103,6 +103,7 @@ namespace fgo::graph {
     FAILED = 0,
     SUCCESSFUL = 1,
     NO_OPTIMIZATION = 2,
+    PASSED = 3,
   };
 
   class GraphBase : public gtsam::NonlinearFactorGraph, public std::enable_shared_from_this<GraphBase> {

@@ -74,17 +74,21 @@ namespace offline_process {
     RCLCPP_INFO(this->get_logger(),
                 "---------------------  OfflineFGOBase initializing Database... --------------------- ");
     utils::RosParameter<std::string> datasetName("Dataset.DatasetUsed", *this);
+
+    auto delimiter_pos = datasetName.value().find("_");
+    const auto dataset_name = datasetName.value().substr(0, delimiter_pos);
+
     RCLCPP_INFO_STREAM(get_logger(), "OfflineFGOBase Dataset used is: " << datasetName.value());
-    if (datasetLoader_.isClassAvailable(datasetName.value())) {
+    if (datasetLoader_.isClassAvailable(dataset_name)) {
       RCLCPP_INFO_STREAM(this->get_logger(),
-                         "OfflineFGOBase: initializing database: " << datasetName.value());
-      dataset_ = datasetLoader_.createSharedInstance(datasetName.value());
-      dataset_->initialize(datasetName.value(), *this, this->sensorCalibManager_);
+                         "OfflineFGOBase: initializing database: " << dataset_name);
+      dataset_ = datasetLoader_.createSharedInstance(dataset_name);
+      dataset_->initialize(dataset_name, *this, this->sensorCalibManager_);
       RCLCPP_INFO_STREAM(this->get_logger(),
                          "OfflineFGOBase: dataset: " << datasetName.value() << " initialized!");
     } else {
       RCLCPP_WARN_STREAM(this->get_logger(),
-                         "OfflineFGOBase: cannot find the plugin of dataset: " << datasetName.value());
+                         "OfflineFGOBase: cannot find the plugin of dataset: " << dataset_name);
     }
     RCLCPP_INFO(this->get_logger(),
                 "---------------------  OfflineFGOBase Database initialized! --------------------- ");

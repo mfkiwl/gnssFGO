@@ -252,7 +252,8 @@ namespace fgo::graph {
           lastAcc = currentAcc;
         }
 
-        if (paramPtr_->gpType == WNOJFull || paramPtr_->gpType == SingerFull || paramPtr_->addConstantAccelerationFactor) {
+        if (paramPtr_->gpType == WNOJFull || paramPtr_->gpType == SingerFull ||
+            paramPtr_->addConstantAccelerationFactor) {
           values_.insert(acc_key_j, currentAcc);
           keyTimestampMap_[acc_key_j] = currentStateTimestamp;
         }
@@ -507,7 +508,8 @@ namespace fgo::graph {
         lastAcc = currentAcc;
       }
 
-      if (paramPtr_->gpType == WNOJFull || paramPtr_->gpType == SingerFull || paramPtr_->addConstantAccelerationFactor) {
+      if (paramPtr_->gpType == WNOJFull || paramPtr_->gpType == SingerFull ||
+          paramPtr_->addConstantAccelerationFactor) {
         values_.insert(acc_key_j, currentAcc);
         keyTimestampMap_[acc_key_j] = ts;
       }
@@ -554,8 +556,10 @@ namespace fgo::graph {
                                                                                                        : "failed!"));
     }
 
-    if (paramPtr_->verbose)
+    if (paramPtr_->verbose) {
       this->print("GraphTimeCentric: ");
+      values_.print("Valued: ");
+    }
 
     if (integrationSuccessfully)
       return StatusGraphConstruction::SUCCESSFUL;

@@ -12,14 +12,14 @@
         notIntegrating: false
         useForInitialization: true
         useHeaderTimestamp: true
-        GNSSMeasurementFrequency: 200
+        GNSSMeasurementFrequency: 100
         PVTSource: "robognss"
         hasHeading: false
         hasPitch: false
         hasRoll: false
         integrateAttitude: false
         integrateVelocity: false
-        onlyRTKFixed: false
+        onlyRTKFixed: true
 
         zeroVelocityThreshold: 0.05
         varScaleRTKFloat: 1.
@@ -32,7 +32,7 @@
         MsgSyncLowerBound: 50000000
 
         fixedVelVar: 0.5
-        posVarScale: 0.01
+        posVarScale: 100.
         velVarScale: 5.
         headingVarScale: 1.
         headingOffsetDeg: 0.
@@ -43,8 +43,8 @@
         velocityType: "3d"
         noiseModelAttitude: "cauchy"
         noiseModelVelocity: "cauchy"
-        noiseModelPosition: "cauchy"
-        robustParamPos: 0.5
+        noiseModelPosition: "huber"
+        robustParamPos: 2.5
         robustParamVel: 0.5
         robustParamAtt: 0.5
 

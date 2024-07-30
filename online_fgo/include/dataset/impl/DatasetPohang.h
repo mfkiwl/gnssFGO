@@ -32,12 +32,10 @@ namespace fgo::dataset {
   using namespace fgo::data;
 
   struct PohangDataBatch : DataBatch {
-    std::vector<Pose> baseline;
+    std::vector<PVASolution> gnss;
     std::vector<StereoPair> stereo_pair;
     std::vector<cv_bridge::CvImagePtr> infrared;
     std::vector<cv_bridge::CvImagePtr> radar;
-    std::vector<PVASolution> gnss;
-    std::vector<State> gnss_state;
     std::vector<IMUMeasurement> imu_lidar_front;
     std::vector<sensor_msgs::msg::PointCloud2::SharedPtr> lidar_front;
   };
@@ -69,7 +67,7 @@ namespace fgo::dataset {
   class Pohang : public DatasetBase {
   protected:
     DataBlock<StereoPair> data_stereo_pair;
-    DataBlock<Pose> data_baseline;
+    DataBlock<PVASolution> data_gnss;
     DataBlock<sensor_msgs::msg::PointCloud2::SharedPtr> data_lidar_front;
     DataBlock<IMUMeasurement> data_imu_lidar_front;
     DataBlock<cv_bridge::CvImagePtr> data_infrared;
@@ -104,9 +102,14 @@ namespace fgo::dataset {
                                                << std::fixed << timestamp_start.seconds() << " and end timestamp "
                                                << timestamp_end.seconds());
       data_imu.trimData(timestamp_start, timestamp_end);
-      data_baseline.trimData(timestamp_start, timestamp_end);
+      data_gnss.trimData(timestamp_start, timestamp_end);
       data_reference_state.trimData(timestamp_start, timestamp_end);
       data_reference.trimData(timestamp_start, timestamp_end);
+      data_lidar_front.trimData(timestamp_start, timestamp_end);
+      data_imu_lidar_front.trimData(timestamp_start, timestamp_end);
+      data_infrared.trimData(timestamp_start, timestamp_end);
+      data_radar.trimData(timestamp_start, timestamp_end);
+      data_stereo_pair.trimData(timestamp_start, timestamp_end);
     }
 
     data::State referenceToState(const PVASolution &reference) override {
@@ -125,7 +128,7 @@ namespace fgo::dataset {
       batch.reference_pva = data_reference.getDataBefore(ros_timestamp, erase);
       batch.reference_state = data_reference_state.getDataBefore(ros_timestamp, erase);
       batch.stereo_pair = data_stereo_pair.getDataBefore(ros_timestamp, erase);
-      batch.baseline = data_baseline.getDataBefore(ros_timestamp, erase);
+      batch.gnss = data_gnss.getDataBefore(ros_timestamp, erase);
       batch.lidar_front = data_lidar_front.getDataBefore(ros_timestamp, erase);
       batch.imu_lidar_front = data_imu_lidar_front.getDataBefore(ros_timestamp, erase);
       batch.infrared = data_infrared.getDataBefore(ros_timestamp, erase);
@@ -143,7 +146,7 @@ namespace fgo::dataset {
       batch.reference_pva = data_reference.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       batch.reference_state = data_reference_state.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       batch.stereo_pair = data_stereo_pair.getDataBetween(ros_timestamp_start, ros_timestamp_end);
-      batch.baseline = data_baseline.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      batch.gnss = data_gnss.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       batch.lidar_front = data_lidar_front.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       batch.imu_lidar_front = data_imu_lidar_front.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       batch.infrared = data_infrared.getDataBetween(ros_timestamp_start, ros_timestamp_end);

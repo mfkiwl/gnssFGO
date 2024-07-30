@@ -20,6 +20,7 @@
 // Created by haoming on 22.05.24.
 //
 
+#include <GeographicLib/UTMUPS.hpp>
 #include "dataset/impl/DatasetPohang.h"
 #include "offline_process/OfflineFGOBase.h"
 
@@ -32,7 +33,7 @@ namespace fgo::dataset {
                        "OfflineFGO Dataset " << name << ": preparing dataset ...");
     data_stereo_pair = DataBlock<StereoPair>("Stereo", "", param_->max_bag_memory_usage,
                                              FGODataTimeGetter<StereoPair>);
-    data_baseline = DataBlock<Pose>("Baseline", "/gx5/baseline", 0, FGODataTimeGetter<Pose>);
+    data_gnss = DataBlock<PVASolution>("Baseline", "/gps/gps_nav_raw", 0, FGODataTimeGetter<PVASolution>);
     data_lidar_front = DataBlock<sensor_msgs::msg::PointCloud2::SharedPtr>("LiDARFront",
                                                                            "/lidar_front/os_cloud_node/points",
                                                                            param_->max_bag_memory_usage,
@@ -43,6 +44,23 @@ namespace fgo::dataset {
     data_radar = DataBlock<cv_bridge::CvImagePtr>("Radar", "/radar/image", param_->max_bag_memory_usage,
                                                   ROSMessagePtrTimeGetter<cv_bridge::CvImagePtr>);
     it = std::make_shared<image_transport::ImageTransport>(rclcpp::Node::SharedPtr(&node));
+
+    for (const auto &topic: param_->excluded_topics) {
+      if (topic == data_lidar_front.data_topic)
+        data_lidar_front.setExcluded(true);
+
+      if (topic == data_infrared.data_topic)
+        data_infrared.setExcluded(true);
+
+      if (topic == data_radar.data_topic)
+        data_radar.setExcluded(true);
+
+      if (topic == data_imu_lidar_front.data_topic)
+        data_imu_lidar_front.setExcluded(true);
+
+      if (topic == "/stereo_cam/left_img/compressed")
+        data_stereo_pair.setExcluded(true);
+    }
 
     param_->topic_type_map = {
       {"/gps/gps_nav_raw",                  fgo::data::DataType::PVASolution},
@@ -63,6 +81,19 @@ namespace fgo::dataset {
     pub_lidar_front = node.create_publisher<sensor_msgs::msg::PointCloud2>("/pohang/lidar/front",
                                                                            rclcpp::SystemDefaultsQoS());
 
+    auto func_on_imu = [this](const std::vector<IMUMeasurement> &data) -> void {
+      static size_t counter = 0;
+      for (const auto &imu: data) {
+        if (counter % 10 == 0) {
+          // std::cout << "IMU rpy: " << imu.AHRSOri.rpy() * fgo::constants::rad2deg << std::endl;
+        }
+        counter++;
+      }
+    };
+
+    data_imu.setCbOnData(func_on_imu);
+
+
     auto func_on_gnss = [this](const std::vector<PVASolution> &data) -> void {
       for (const auto &pva: data) {
         sensor_msgs::msg::NavSatFix navfix;
@@ -73,25 +104,24 @@ namespace fgo::dataset {
         pub_gnss_->publish(navfix);
       }
     };
-    data_reference.setCbOnData(func_on_gnss);
-
-    auto func_on_baseline = [this](const std::vector<Pose> &data) -> void {
-      for (const auto &p: data) {
+    auto func_on_reference = [this](const std::vector<PVASolution> &data) -> void {
+      for (const auto &pva: data) {
         sensor_msgs::msg::NavSatFix navfix;
-        const auto llh = utils::xyz2llh(p.pose.translation());
-        navfix.header.stamp = p.timestamp;
-        navfix.header.frame_id = "imu";
-        navfix.latitude = llh.x() * constants::rad2deg;
-        navfix.longitude = llh.y() * constants::rad2deg;
-        navfix.altitude = llh.z();
+        navfix.header.stamp = pva.timestamp;
+        navfix.latitude = pva.llh[0] * constants::rad2deg;
+        navfix.longitude = pva.llh[1] * constants::rad2deg;
+        navfix.altitude = pva.llh[2];
         pub_baseline_->publish(navfix);
+        std::cout << "Reference ECEF " << std::fixed << pva.xyz_ecef << std::endl;
+        std::cout << "Reference RPY " << std::fixed << pva.rot_n.rpy() * fgo::constants::rad2deg << std::endl;
       }
     };
-    data_baseline.setCbOnData(func_on_baseline);
+    data_reference.setCbOnData(func_on_reference);
+    data_gnss.setCbOnData(func_on_gnss);
 
-    pub_left_raw = it->advertise("pohang/zed/left", 1);
-    pub_right_raw = it->advertise("pohang/zed/right", 1);
-    pub_infrared = it->advertise("pohang/infrared", 1);
+    pub_left_raw = it->advertise("/pohang/zed/left", 1);
+    pub_right_raw = it->advertise("/pohang/zed/right", 1);
+    pub_infrared = it->advertise("/pohang/infrared", 1);
     auto func_on_stereopair = [this](const std::vector<StereoPair> &pairs) -> void {
       for (const auto &pair: pairs) {
         if (pair.left)
@@ -161,7 +191,7 @@ namespace fgo::dataset {
                                                                               max_size,
                                                                               bag_bas_next);
       for (const auto &timestamp_buffer_pair: raw_buffer_map) {
-        const auto [timestamp, img] = this->readROSMessage<sensor_msgs::msg::CompressedImage>(timestamp_buffer_pair);
+        const auto [timestamp, img] = this->readROSMessage<sensor_msgs::msg::Image>(timestamp_buffer_pair);
         auto cvImgPtr = cv_bridge::toCvCopy(img);
         data_map.insert(std::make_pair(timestamp, cvImgPtr));
       }
@@ -170,6 +200,7 @@ namespace fgo::dataset {
                                                << (bag_bas_next ? "Yes" : "No"));
       return {bag_bas_next, data_map};
     };
+
 
     auto func_on_image = [this](const std::vector<cv_bridge::CvImagePtr> &images) -> void {
       for (const auto &image: images) {
@@ -214,14 +245,14 @@ namespace fgo::dataset {
                        "OfflineFGO Dataset " << name << ": prepared!");
   }
 
-  void Pohang::parseDataFromBag()  {
+  void Pohang::parseDataFromBag() {
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
                        "OfflineFGO Dataset " << name << ": Parsing raw data into data blocks ...");
     const auto raw_imu_msg = readROSMessages<sensor_msgs::msg::Imu>(data_imu.data_topic);
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": got imu");
-    const auto raw_imu_baseline_msg = readROSMessages<geometry_msgs::msg::PoseStamped>(data_baseline.data_topic);
+    const auto raw_baseline = readROSMessages<geometry_msgs::msg::PoseStamped>(data_reference.data_topic);
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": got ahrs baseline");
-    const auto raw_gps_pvt_msg = readROSMessages<robognss_msgs::msg::PVT>(data_reference.data_topic);
+    const auto raw_gps_pvt_msg = readROSMessages<robognss_msgs::msg::PVT>(data_gnss.data_topic);
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": got GNSS raw");
     const auto raw_imu_lidarfront_msg = readROSMessages<sensor_msgs::msg::Imu>(data_imu_lidar_front.data_topic);
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
@@ -240,23 +271,43 @@ namespace fgo::dataset {
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
                        "OfflineFGO Dataset " << name << ": parsed IMU data ...");
 
-    DataBlock<Pose>::DataMap baseline_map;
-    for (const auto &time_msg_pair: raw_imu_baseline_msg) {
-      baseline_map.insert(std::make_pair(time_msg_pair.first, convertPoseStampedToFGOPose(time_msg_pair.second)));
-    }
-    data_baseline.setData(baseline_map, true);
-
-    static const auto transReferenceFromBase = sensor_calib_manager_->getTransformationFromBase("reference");
-    DataBlock<PVASolution>::DataMap gps_map;
+    DataBlock<PVASolution>::DataMap baseline_map;
     DataBlock<State>::DataMap state_map;
-    for (const auto &time_msg_pair: raw_gps_pvt_msg) {
-      auto [pva, state] = sensor::gnss::parseRoboGNSSPVTMsg(time_msg_pair.second,
-                                                            transReferenceFromBase.translation());
-      gps_map.insert(std::make_pair(time_msg_pair.first, pva));
-      state_map.insert(std::make_pair(time_msg_pair.first, state));
+    for (const auto &time_msg_pair: raw_baseline) {
+      const auto &msg = time_msg_pair.second;
+      PVASolution sol{};
+      sol.timestamp = time_msg_pair.first;
+      double lat, lon;
+      GeographicLib::UTMUPS::Reverse(52, true, msg.pose.position.y, msg.pose.position.x, lat, lon);
+      sol.llh = (gtsam::Vector3() << lat * fgo::constants::deg2rad, lon *
+                                                                    fgo::constants::deg2rad, msg.pose.position.z).finished();
+      sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
+      sol.xyz_var = (gtsam::Vector3() << 0.3, 0.3, 0.3).finished();
+      sol.has_velocity = false;
+      sol.vel_var = (gtsam::Vector3() << 100., 100., 100.).finished();
+      sol.has_heading = true;
+      sol.has_roll_pitch = true;
+      sol.rot_n = gtsam::Rot3(msg.pose.orientation.w, msg.pose.orientation.x, msg.pose.orientation.y,
+                              msg.pose.orientation.z);
+      sol.nRe = gtsam::Rot3(fgo::utils::nedRe_Matrix_asLLH(sol.llh));
+      sol.rot_ecef = sol.nRe.inverse().compose(sol.rot_n);
+      sol.rot_var = gtsam::Vector3::Identity() * 5 * fgo::constants::deg2rad;
+      sol.has_rotation_3D = true;
+      sol.vel_ecef = (gtsam::Vector3() << 0.5, 0.5, 0.5).finished();
+      baseline_map.insert(std::make_pair(time_msg_pair.first, sol));
+      state_map.insert(std::make_pair(time_msg_pair.first, fgo::sensor::gnss::PVASolutionToState(sol)));
     }
-    data_reference.setData(gps_map, true);
+    data_reference.setData(baseline_map, true);
     data_reference_state.setData(state_map, true);
+
+    DataBlock<PVASolution>::DataMap gps_map;
+    for (const auto &time_msg_pair: raw_gps_pvt_msg) {
+      auto [pva, state] = sensor::gnss::parseRoboGNSSPVTMsg(time_msg_pair.second);
+      pva.xyz_var = (gtsam::Vector3() << .5, 0.5, 0.5).finished();
+      gps_map.insert(std::make_pair(time_msg_pair.first, pva));
+    }
+    data_gnss.setData(gps_map, true);
+
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
                        "OfflineFGO Dataset " << name << ": parsed gnss/reference PVA data ...");
 
@@ -291,20 +342,22 @@ namespace fgo::dataset {
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got gps of size " << data_batch.gnss.size());
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got lidar of size " << data_batch.lidar_front.size());
     RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got stereo_pair of size " << data_batch.stereo_pair.size());
-    auto gnss_integrator_base = appPtr_->getGraphPtr()->getIntegrator("PohangGNSSLCIntegrator");
-    auto gnss_integrator = reinterpret_cast<const std::shared_ptr<fgo::integrator::GNSSLCIntegrator>&>(gnss_integrator_base);
-    gnss_integrator->feedRAWData(data_batch.reference_pva, data_batch.reference_state);
+    static auto gnss_integrator_base = appPtr_->getGraphPtr()->getIntegrator("PohangGNSSLCIntegrator");
+    static auto gnss_integrator = reinterpret_cast<const std::shared_ptr<fgo::integrator::GNSSLCIntegrator> &>(gnss_integrator_base);
+    std::vector<State> states;
+    for (const auto &pva: data_batch.gnss)
+      states.emplace_back(fgo::sensor::gnss::PVASolutionToState(pva));
+    gnss_integrator->feedRAWData(data_batch.gnss, states);
     appPtr_->updateReferenceBuffer(data_batch.reference_pva);
-    return appPtr_->getGraphPtr()->constructFactorGraphOnTime(stateTimestamps, data_batch.imu);
 
-
-
-
-
-    return graph::SUCCESSFUL;
+    //static auto beacon_integrator_base = appPtr_->getGraphPtr()->getIntegrator("BeaconIntegrator");
+    if (!param_->onlyDataPlaying)
+      return appPtr_->getGraphPtr()->constructFactorGraphOnTime(stateTimestamps, data_batch.imu);
+    else
+      return graph::NO_OPTIMIZATION;
   }
-
 }
 
 #include <pluginlib/class_list_macros.hpp>
+
 PLUGINLIB_EXPORT_CLASS(fgo::dataset::Pohang, fgo::dataset::DatasetBase)

@@ -3,7 +3,7 @@
   ros__parameters:
     use_sim_time: true
     GNSSFGO:
-      verbose: true
+      verbose: false
       offlineProcess: true
       useIMUAsTimeReference: false
       bufferSize: 10
@@ -12,19 +12,19 @@
       calcErrorOnOpt: true
       cleanIMUonInit: true    # set this flag to clean the imu data before the timestamp of the initializing state
       useHeaderTimestamp: true
-      calibGravity: false
+      calibGravity: true
 
       Initialization:
-        initSigmaX: [ 1., 1., 1., 0.1, 0.1, 0.1 ] #first 3 for Rot in degree, other for translation in m
-        initSigmaV: [ 1., 1., 1. ]
+        initSigmaX: [ 10., 10., 10., 0.1, 0.1, 0.1 ] #first 3 for Rot in degree, other for translation in m
+        initSigmaV: [ 1000., 1000., 1000. ]
         initSigmaW: [ 0.05, 0.05, 0.05 ]
         initSigmaB: [ 0.5, 0.5, 0.5, 0.05, 0.05, 0.05 ] #first for b_a, second for b_g in degree
         initSigmaC: [ 1000., 10. ] #cb in m, cd in m/s
 
       IMUPreintegrator:
-        accelerometerSigma: 8e-4
-        integrationSigma: 1e-5
-        gyroscopeSigma: 1.5636343949698187e-05   #52e-4 # 52e-5
+        accelerometerSigma: 3e-8
+        integrationSigma: 1e-4
+        gyroscopeSigma: 1.5636343949698187e-04   #52e-4 # 52e-5
         biasAccSigma: 0.000167 # 4e-4
         biasOmegaSigma: 87e-5 # 87e-5
         biasAccOmegaInt: 0.00001 # 0.00001
@@ -32,11 +32,11 @@
       Graph:
         publishResiduals: false
         publishResidualsOnline: false
-        addIMUFactor: false
-        IMUMeasurementFrequency: 200  #
+        addIMUFactor: true
+        IMUMeasurementFrequency: 100  #
         addGPPriorFactor: true
         fullGPPrior: false
-        gpType: 'WNOJ'  # 'WNOA'
+        gpType: 'WNOA'  # 'WNOA'
         addGPInterpolatedFactor: true
         addEstimatedVarianceAfterInit: false
 
@@ -63,12 +63,12 @@
         VoteNearZeroVelocity: 0.1 # 20%
         NoOptimizationAfterStates: 0
 
-      Integrators: [ "PohangNSSLCIntegrator", ]   # ["PohangNSSLCIntegrator", "LIOIntegrator", "BeaconPohang"]
+      Integrators: [ "PohangGNSSLCIntegrator", ]   # ["PohangNSSLCIntegrator", "LIOIntegrator", "BeaconPohang"]
 
       Optimizer:
         #undefined, BatchFixedLag, IncrementalFixedLag
         smootherType: 'IncrementalFixedLag'
-        smootherLag: 3. #marginalization threshold
+        smootherLag: .5 #marginalization threshold
         #QcGPWNOJInterpolator: 1000.
         #QcGPWNOJMotionPrior: 10000.
         QcGPWNOJInterpolatorFull: [ 10000., 10000., 10000., 10000., 100000., 10000. ]
