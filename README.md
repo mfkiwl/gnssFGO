@@ -1,6 +1,10 @@
 # gnssFGO: an online and time-centric factor graph optimization for GNSS/Multi-sensor vehicle localization
 
-## Update 25.07.2024
+# Update 16.08.2024: End of Life of this repository in the rwth-irt account.
+## This repository will be archived due to administration reason. 
+## It will be continuously maintained at https://github.com/hz658832/gnssFGO
+
+# Update 25.07.2024
 1. The docker is ready in the folder docker. More information, see README.md in the docker folder. 
 2. A docker image can be pulled from 
 ```bash
@@ -54,7 +58,7 @@ The goal of this framework is to build a fundamental time-centric graph-optimiza
 
 [2] *Haoming Zhang, Zhanxin Wang and Heike Vallery*, Learning-based NLOS Detection and Uncertainty Prediction of GNSS Observations with Transformer-Enhanced LSTM Network, accepted at the IEEE ITSC2023, arxiv, DOI: [10.48550/arXiv.2309.00480](https://arxiv.org/abs/2309.00480) (cannot be viewed in chrome due to large vector graphics)
 
-For more information and sample request, please contact h.zhang@irt.rwth-aachen.de
+For more information and sample request, please contact haoming.zhang@rwth-aachen.de
 
 
 ---
