@@ -24,7 +24,7 @@ set(ONLINEFGO_INTEGRATOR_SRC
     GNSSTCIntegrator.cpp
     IMUPreIntegrator.cpp
     LIOIntegrator.cpp
-    BeaconIntegrator.cpp
+    #BeaconIntegrator.cpp
 )
 
 add_library(${ONLINEFGO_INTEGRATOR_NAME}
