@@ -22,6 +22,7 @@ set(ONLINEFGO_SENSOR_NAME
 add_library(${ONLINEFGO_SENSOR_NAME} 
     SHARED
     lidar/LIOSAM.cpp
+    camera/Beacon.cpp
 )
 target_include_directories(${ONLINEFGO_SENSOR_NAME} 
     PUBLIC
@@ -35,7 +36,6 @@ add_definitions(${PCL_DEFINITIONS})
 ament_target_dependencies(${ONLINEFGO_SENSOR_NAME}
     PUBLIC
     "lio_sam"
-
     "tf2"
     "tf2_ros"
     "tf2_eigen"

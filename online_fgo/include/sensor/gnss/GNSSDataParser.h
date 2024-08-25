@@ -243,8 +243,9 @@ namespace fgo::sensor::gnss {
   inline std::tuple<fgo::data::PVASolution, fgo::data::State> parseNavFixWithTwist(const sensor_msgs::msg::NavSatFix &fix,
                                                                                    const geometry_msgs::msg::TwistStamped &twist,
                                                                                    const rclcpp::Time &msg_timestamp,
+                                                                                   const std::vector<IMUMeasurement> &imu,
                                                                                    const gtsam::Vector3 &leverArm = gtsam::Vector3(),
-                                                                                   bool isENU=true) {
+                                                                                   const bool isENU=true) {
     fgo::data::PVASolution sol{};
     sol.timestamp = msg_timestamp;
     sol.llh = (gtsam::Vector3() << fix.latitude * fgo::constants::deg2rad,
@@ -252,6 +253,9 @@ namespace fgo::sensor::gnss {
       fix.altitude).finished();
     sol.xyz_ecef = fgo::utils::llh2xyz(sol.llh);
     sol.type = data::GNSSSolutionType::RTKFIX;
+    sol.xyz_var = (gtsam::Vector3() << 0.05,
+      0.05,
+      0.05).finished();
     sol.has_velocity = true;
 
     if(isENU)
@@ -262,10 +266,29 @@ namespace fgo::sensor::gnss {
     {
       sol.nRe = gtsam::Rot3(fgo::utils::nedRe_Matrix(sol.xyz_ecef));
     }
-    sol.vel_n = (gtsam::Vector3()<<twist.twist.linear.x, twist.twist.linear.y, twist.twist.linear.z).finished();
-    sol.vel_ecef = sol.nRe.inverse().rotate(sol.vel_n);
 
+    if(!imu.empty()) {
+      const auto& last_imu = imu.back();
+      sol.rot_n = last_imu.AHRSOri;
+      sol.rot_ecef = sol.nRe.inverse().compose(sol.rot_n);
+      sol.rot_var = (gtsam::Vector3() << 0.05,
+           0.05,
+           0.05).finished();
 
+      sol.vel_ecef = sol.rot_ecef.rotate((gtsam::Vector3() << twist.twist.linear.x, twist.twist.linear.y, twist.twist.linear.z).finished());
+      sol.vel_n = sol.nRe.rotate(sol.vel_ecef);
+      sol.vel_var = (gtsam::Vector3() << 0.1,
+        0.1,
+        0.1).finished();
+    }
+    else {
+      sol.rot_var = (gtsam::Vector3() << 3.1415*3.1415,
+     3.1415*3.1415,
+     3.1415*3.1415).finished();
+      sol.vel_var = (gtsam::Vector3() << 100,
+       100,
+       100).finished();
+    }
     return {sol, PVASolutionToState(sol, leverArm)};
   }
 

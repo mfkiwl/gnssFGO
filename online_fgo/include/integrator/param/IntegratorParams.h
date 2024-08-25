@@ -144,6 +144,16 @@ namespace fgo::integrator::param
     };
     typedef std::shared_ptr<IntegratorOdomParams> IntegratorOdomParamsPtr;
 
+    struct IntegratorVisualParams : IntegratorBaseParams
+    {
+        bool integrateBetweenPose = true;
+        bool integrateGlobalPose = false;
+
+        IntegratorVisualParams() = default;
+        explicit IntegratorVisualParams(const IntegratorBaseParamsPtr &baseParamPtr) : IntegratorBaseParams(*baseParamPtr){}
+    };
+    typedef std::shared_ptr<IntegratorVisualParams> IntegratorVisualParamsPtr;
+
     struct IntegratorCorrevitParams : IntegratorBaseParams {
         //IntegratorCorrevitParams() = default;
 

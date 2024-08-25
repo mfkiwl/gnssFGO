@@ -80,7 +80,7 @@ def generate_launch_description():
         namespace="offline_process",
         output='screen',
         emulate_tty=True,
-        prefix=['xterm -sl 10000 -hold -e '],
+        prefix=['xterm -sl 100000 -hold -e '],
         # arguments=['--ros-args', '--log-level', logger],
         parameters=[
             config_common_path,
@@ -101,9 +101,9 @@ def generate_launch_description():
     )
 
     ### MAPVIZ
-    mapviz_dir = get_package_share_directory("mapviz")
+    mapviz_dir = get_package_share_directory("online_fgo")
     mapviz_launch = IncludeLaunchDescription(
-        launch.launch_description_sources.PythonLaunchDescriptionSource(mapviz_dir + '/launch/mapviz.pohang.launch.py'))
+        launch.launch_description_sources.PythonLaunchDescriptionSource(mapviz_dir + '/launch/mapviz_pohang.launch.py'))
 
     # Define LaunchDescription variable and return it
     ld = LaunchDescription()

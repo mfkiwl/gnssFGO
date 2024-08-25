@@ -23,8 +23,8 @@
 
       IMUPreintegrator:
         accelerometerSigma: 3e-8
-        integrationSigma: 1e-4
-        gyroscopeSigma: 1.5636343949698187e-04   #52e-4 # 52e-5
+        integrationSigma: 1e-5
+        gyroscopeSigma: 52e-4 # 52e-5
         biasAccSigma: 0.000167 # 4e-4
         biasOmegaSigma: 87e-5 # 87e-5
         biasAccOmegaInt: 0.00001 # 0.00001
@@ -36,7 +36,7 @@
         IMUMeasurementFrequency: 100  #
         addGPPriorFactor: true
         fullGPPrior: false
-        gpType: 'WNOA'  # 'WNOA'
+        gpType: 'WNOJ'  # 'WNOA'
         addGPInterpolatedFactor: true
         addEstimatedVarianceAfterInit: false
 
@@ -63,7 +63,7 @@
         VoteNearZeroVelocity: 0.1 # 20%
         NoOptimizationAfterStates: 0
 
-      Integrators: [ "PohangGNSSLCIntegrator", ]   # ["PohangNSSLCIntegrator", "LIOIntegrator", "BeaconPohang"]
+      Integrators: [ "GNSSLCIntegrator", ]   # ["PohangGNSSLCIntegrator", "LIOIntegrator", "BeaconIntegrator"]
 
       Optimizer:
         #undefined, BatchFixedLag, IncrementalFixedLag
@@ -71,8 +71,8 @@
         smootherLag: .5 #marginalization threshold
         #QcGPWNOJInterpolator: 1000.
         #QcGPWNOJMotionPrior: 10000.
-        QcGPWNOJInterpolatorFull: [ 10000., 10000., 10000., 10000., 100000., 10000. ]
-        QcGPWNOJMotionPriorFull: [ 10000., 10000., 10000., 10000., 10000., 10000. ]
+        QcGPWNOJInterpolatorFull: [ 10000., 100000., 100000., 100000., 100000., 100000. ]
+        QcGPWNOJMotionPriorFull: [ 100000., 100000., 100000., 100000., 100000., 100000. ]
         #QcGPWNOJInterpolatorFull: [ 1000., 1000., 1000., 10000., 10000., 10000. ]
         #QcGPWNOJMotionPriorFull: [ 1000., 1000., 1000., 10000., 10000., 10000. ]
         #QcGPWNOAInterpolator: 0.5
@@ -81,5 +81,4 @@
         QcGPWNOAMotionPriorFull: [ 1.666669, 1.666669, 1.666669, 16.66669, 16.66669, 16.66669 ]
         #QcGPWNOAInterpolatorFull: [ .16691, .16691, .16691, 1.666669, 1.666669, 1.666669 ]
         #QcGPWNOAMotionPriorFull: [ .16691, .16691, .16691, 1.666669, 1.666669, 1.666669 ]
-        #QcGPWNOAInterpolatorFull: [ 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 ]
-        #QcGPWNOAMotionPriorFull: [ 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 ]
+

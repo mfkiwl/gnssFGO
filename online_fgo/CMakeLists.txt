@@ -15,6 +15,8 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif ()
 
+option(ENABLE_VISUAL "Enable visual thirdparty, factors and integrators" OFF)
+option(ENABLE_BEACON "Using Beacon for visual processing" OFF)
 
 # find ROS2 dependencies
 find_package(NumCpp REQUIRED)
@@ -75,6 +77,12 @@ include(GtsamMakeConfigFile)
 include(GtsamBuildTypes)
 include(GtsamTesting)
 # include_directories(${GTSAM_INCLUDE_DIR})
+
+if(ENABLE_VISUAL)
+    if(ENABLE_BEACON)
+        find_package(Beacon REQUIRED HINTS /workspace/mylib)
+    endif()
+endif()
 
 # Ceres to solve the NLS problem
 #find_package(Ceres 2.0 REQUIRED) # ToDo: actually we don't need ceres, but i just put it here
@@ -171,6 +179,18 @@ set(ONLINEFGO_LINK
 set(ONLINEFGO_BUILD_TARGET
 ) # it is empty and target name will be collected by subdirs
 add_compile_options(${OpenMP_CXX_FLAGS})
+
+if(ENABLE_VISUAL AND ENABLE_BEACON)
+    add_compile_definitions(ENABLE_BEACON)
+    set(ONLINEFGO_LINK
+        ${ONLINEFGO_LINK}
+        Beacon::BeaconModule
+    )
+    set(ONLINEFGO_INCLUDE
+        ${ONLINEFGO_INCLUDE}
+        ${BEACON_INCLUDE_DIRS}
+    )
+endif()
 
 # ************************** Subdirectory ********************************** #
 # subdirs are inter-dependent, change the order with caution

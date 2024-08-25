@@ -18,14 +18,20 @@
 set(ONLINEFGO_INTEGRATOR_NAME
         ${ONLINEFGO_PREFIX}_integrator
 )
+set(ONLINEFGO_INTEGRATOR_SRC
+    CorrevitIntegrator.cpp
+    GNSSLCIntegrator.cpp
+    GNSSTCIntegrator.cpp
+    IMUPreIntegrator.cpp
+    LIOIntegrator.cpp
+    BeaconIntegrator.cpp
+)
+
 add_library(${ONLINEFGO_INTEGRATOR_NAME}
         SHARED
-        CorrevitIntegrator.cpp
-        GNSSLCIntegrator.cpp
-        GNSSTCIntegrator.cpp
-        IMUPreIntegrator.cpp
-        LIOIntegrator.cpp
+        ${ONLINEFGO_INTEGRATOR_SRC}
 )
+
 #add_library(${PROJECT_NAME}::${ONLINEFGO_INTEGRATOR_NAME} ALIAS ${ONLINEFGO_INTEGRATOR_NAME})
 target_include_directories(${ONLINEFGO_INTEGRATOR_NAME}
         PUBLIC

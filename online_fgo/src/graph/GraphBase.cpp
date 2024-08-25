@@ -639,6 +639,7 @@ namespace fgo::graph {
       keyTimestampMap_[A(0)] = initTimestamp;
     }
 
+
     for (const auto &integrator: integratorMap_) {
       integrator.second->dropMeasurementBefore(initTimestamp);
     }

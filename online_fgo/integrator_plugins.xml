@@ -37,6 +37,12 @@
         </description>
     </class>
 
+    <class name="BeaconIntegrator" type="fgo::integrator::BeaconIntegrator" base_class_type="fgo::integrator::IntegratorBase">
+        <description>
+            BeaconIntegrator
+        </description>
+    </class>
+
     <class name="CorrevitIntegrator" type="fgo::integrator::CorrevitIntegrator" base_class_type="fgo::integrator::IntegratorBase">
         <description>
             CorrevitIntegrator

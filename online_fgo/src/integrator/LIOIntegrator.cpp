@@ -70,25 +70,6 @@ namespace fgo::integrator {
                                                                        pubSensorReport_,
                                                                        sensorCalibManager_->getTransformationFromBase(
                                                                          sensorName_));
-
-    if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOJ) {
-      interpolatorI_ = std::make_shared<fgo::models::GPWNOJInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
-        integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
-      interpolatorJ_ = std::make_shared<fgo::models::GPWNOJInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
-        integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
-    } else if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
-        integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
-      interpolatorJ_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
-        integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
-    } else {
-      RCLCPP_WARN(rosNodePtr_->get_logger(), "LIOIntegrator::addFactors NO gpType chosen. Please choose.");
-    }
-
     RCLCPP_INFO(rosNodePtr_->get_logger(), "--------------------- LIOIntegrator initialized! ---------------------");
 
   };
@@ -101,6 +82,7 @@ namespace fgo::integrator {
                                  fgo::solvers::FixedLagSmoother::KeyTimestampMap &keyTimestampMap,
                                  gtsam::KeyVector &relatedKeys) {
 
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorI, interpolatorJ;
     nState_ = currentKeyIndexTimestampMap.end()->first;
 
     //LIOSAM_->updateKeyIndexTimestampMap(currentKeyIndexTimestampMap);
@@ -117,6 +99,24 @@ namespace fgo::integrator {
     uint32_t numOdom_ = 0;
     for (const auto &odom: dataSensor) {
       bool hasBetweenPose = checkStatePresentedInCurrentLag(odom.queryOutputPrevious.keyIndexI);
+
+      if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOJ) {
+        interpolatorI = std::make_shared<fgo::models::GPWNOJInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+        interpolatorJ = std::make_shared<fgo::models::GPWNOJInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+      } else if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
+        interpolatorI = std::make_shared<fgo::models::GPWNOAInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+        interpolatorJ = std::make_shared<fgo::models::GPWNOAInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+      } else {
+        RCLCPP_WARN(rosNodePtr_->get_logger(), "LIOIntegrator::addFactors NO gpType chosen. Please choose.");
+      }
 
       if (!hasBetweenPose) {
         RCLCPP_ERROR_STREAM(rosNodePtr_->get_logger(),
@@ -180,10 +180,10 @@ namespace fgo::integrator {
           if (integratorParamPtr_->gpType == data::GPModelType::WNOJ) {
             this_result.accII = odom.queryOutputPrevious.accI;
             this_result.accIJ = odom.queryOutputPrevious.accJ;
-            interpolatorI_->recalculate(delta_t, odom.queryOutputPrevious.durationI, odom.queryOutputPrevious.accI,
+            interpolatorI->recalculate(delta_t, odom.queryOutputPrevious.durationI, odom.queryOutputPrevious.accI,
                                         odom.queryOutputPrevious.accJ);
           } else
-            interpolatorI_->recalculate(delta_t, odom.queryOutputPrevious.durationI);
+            interpolatorI->recalculate(delta_t, odom.queryOutputPrevious.durationI);
         }
 
         if (!odom.queryOutputCurrent.keySynchronized) {
@@ -192,10 +192,10 @@ namespace fgo::integrator {
           if (integratorParamPtr_->gpType == data::GPModelType::WNOJ) {
             this_result.accJI = odom.queryOutputCurrent.accI;
             this_result.accJJ = odom.queryOutputCurrent.accJ;
-            interpolatorJ_->recalculate(delta_t, odom.queryOutputCurrent.durationI, odom.queryOutputCurrent.accI,
+            interpolatorJ->recalculate(delta_t, odom.queryOutputCurrent.durationI, odom.queryOutputCurrent.accI,
                                         odom.queryOutputCurrent.accJ);
           } else
-            interpolatorJ_->recalculate(delta_t, odom.queryOutputCurrent.durationI);
+            interpolatorJ->recalculate(delta_t, odom.queryOutputCurrent.durationI);
         }
 
         // NOTICE: LiDAR ODOM is already transformed in IMU CS
@@ -219,7 +219,7 @@ namespace fgo::integrator {
                 W(odom.queryOutputCurrent.keyIndexI),
                 X(odom.queryOutputCurrent.keyIndexJ), V(odom.queryOutputCurrent.keyIndexJ),
                 W(odom.queryOutputCurrent.keyIndexJ),
-                odom.poseRelativeECEF, interpolatorI_, interpolatorJ_, noise_model);
+                odom.poseRelativeECEF, interpolatorI, interpolatorJ, noise_model);
             }
             odomResults_.emplace_back(this_result);
           } else if (!odom.queryOutputPrevious.keySynchronized && odom.queryOutputCurrent.keySynchronized) {
@@ -233,7 +233,7 @@ namespace fgo::integrator {
                 W(odom.queryOutputPrevious.keyIndexJ),
                 X(odom.queryOutputCurrent.keyIndexI),
                 odom.poseRelativeECEF, false,
-                interpolatorI_, noise_model);
+                interpolatorI, noise_model);
             }
             odomResults_.emplace_back(this_result);
           } else if (odom.queryOutputPrevious.keySynchronized && !odom.queryOutputCurrent.keySynchronized) {
@@ -247,7 +247,7 @@ namespace fgo::integrator {
                 W(odom.queryOutputCurrent.keyIndexJ),
                 X(odom.queryOutputPrevious.keyIndexI),
                 odom.poseRelativeECEF, true,
-                interpolatorJ_, noise_model);
+                interpolatorJ, noise_model);
             }
             odomResults_.emplace_back(this_result);
 
@@ -296,7 +296,7 @@ namespace fgo::integrator {
                                               X(odom.queryOutputCurrent.keyIndexJ),
                                               V(odom.queryOutputCurrent.keyIndexJ),
                                               W(odom.queryOutputCurrent.keyIndexJ),
-                                              odom.poseToECEF, integratorParamPtr_->odomPoseVar, interpolatorJ_);
+                                              odom.poseToECEF, integratorParamPtr_->odomPoseVar, interpolatorJ);
         }
         // }
 
@@ -353,6 +353,29 @@ namespace fgo::integrator {
   bool LIOIntegrator::fetchResult(const gtsam::Values &result, const gtsam::Marginals &martinals,
                                   const solvers::FixedLagSmoother::KeyIndexTimestampMap &keyIndexTimestampMap,
                                   data::State &optState) {
+    static std::shared_ptr<fgo::models::GPInterpolator> interpolatorI, interpolatorJ;
+    static bool interpolatorInitialized = false;
+    if(!interpolatorInitialized) {
+      if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOJ) {
+        interpolatorI = std::make_shared<fgo::models::GPWNOJInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+        interpolatorJ = std::make_shared<fgo::models::GPWNOJInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+      } else if (integratorParamPtr_->gpType == fgo::data::GPModelType::WNOA) {
+        interpolatorI = std::make_shared<fgo::models::GPWNOAInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+        interpolatorJ = std::make_shared<fgo::models::GPWNOAInterpolator>(
+          gtsam::noiseModel::Diagonal::Variances(integratorParamPtr_->QcGPInterpolatorFull), 0, 0,
+          integratorParamPtr_->AutoDiffGPInterpolatedFactor, integratorParamPtr_->GPInterpolatedFactorCalcJacobian);
+      } else {
+        RCLCPP_WARN(rosNodePtr_->get_logger(), "LIOIntegrator::addFactors NO gpType chosen. Please choose.");
+      }
+      interpolatorInitialized = true;
+    }
+
     for (const auto &odom: odomResults_) {
       //continue;
       gtsam::Pose3 poseI, poseJ;
@@ -382,10 +405,10 @@ namespace fgo::integrator {
                              "Case 2: Continue because no keyindexII in results, should be marginalized out!");
           poseI = odom.posePreviousIMUECEFQueried;
         }
-        interpolatorJ_->recalculate(odom.timestampJJ - odom.timestampJI, odom.durationJI);
+        interpolatorJ->recalculate(odom.timestampJJ - odom.timestampJI, odom.durationJI);
 
         if (result.exists(X(odom.keyIndexJI)) && result.exists(X(odom.keyIndexJJ))) {
-          poseJ = interpolatorJ_->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexJI)),
+          poseJ = interpolatorJ->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexJI)),
                                                   result.at<gtsam::Vector3>(V(odom.keyIndexJI)),
                                                   result.at<gtsam::Vector3>(W(odom.keyIndexJI)),
                                                   result.at<gtsam::Pose3>(X(odom.keyIndexJJ)),
@@ -406,10 +429,10 @@ namespace fgo::integrator {
           poseJ = odom.poseCurrentIMUECEFQueried;
         }
 
-        interpolatorI_->recalculate(odom.timestampIJ - odom.timestampII, odom.durationII);
+        interpolatorI->recalculate(odom.timestampIJ - odom.timestampII, odom.durationII);
 
         if (result.exists(X(odom.keyIndexII)) && result.exists(X(odom.keyIndexIJ))) {
-          poseI = interpolatorI_->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexII)),
+          poseI = interpolatorI->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexII)),
                                                   result.at<gtsam::Vector3>(V(odom.keyIndexII)),
                                                   result.at<gtsam::Vector3>(W(odom.keyIndexII)),
                                                   result.at<gtsam::Pose3>(X(odom.keyIndexIJ)),
@@ -424,11 +447,11 @@ namespace fgo::integrator {
 
       } else if (!odom.keyISynchronized && !odom.keyJSynchronized) {
         //RCLCPP_WARN_STREAM(appPtr_->get_logger(), "Case 3: !odom.keyISynchronized && !odom.keyJSynchronized");
-        interpolatorI_->recalculate(odom.timestampIJ - odom.timestampII, odom.durationII);
-        interpolatorJ_->recalculate(odom.timestampJJ - odom.timestampJI, odom.durationJI);
+        interpolatorI->recalculate(odom.timestampIJ - odom.timestampII, odom.durationII);
+        interpolatorJ->recalculate(odom.timestampJJ - odom.timestampJI, odom.durationJI);
 
         if (result.exists(X(odom.keyIndexII)) && result.exists(X(odom.keyIndexIJ))) {
-          poseI = interpolatorI_->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexII)),
+          poseI = interpolatorI->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexII)),
                                                   result.at<gtsam::Vector3>(V(odom.keyIndexII)),
                                                   result.at<gtsam::Vector3>(W(odom.keyIndexII)),
                                                   result.at<gtsam::Pose3>(X(odom.keyIndexIJ)),
@@ -442,7 +465,7 @@ namespace fgo::integrator {
         }
 
         if (result.exists(X(odom.keyIndexJI)) && result.exists(X(odom.keyIndexJJ))) {
-          poseJ = interpolatorJ_->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexJI)),
+          poseJ = interpolatorJ->interpolatePose(result.at<gtsam::Pose3>(X(odom.keyIndexJI)),
                                                   result.at<gtsam::Vector3>(V(odom.keyIndexJI)),
                                                   result.at<gtsam::Vector3>(W(odom.keyIndexJI)),
                                                   result.at<gtsam::Pose3>(X(odom.keyIndexJJ)),

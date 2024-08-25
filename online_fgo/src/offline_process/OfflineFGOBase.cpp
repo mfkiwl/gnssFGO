@@ -122,11 +122,16 @@ namespace offline_process {
       << " s with state: " << lastOptimizedState_.state
       << " pose variances: " << lastOptimizedState_.poseVar.diagonal());
 
+    const auto nRe = gtsam::Rot3(fgo::utils::enuRe_Matrix(lastOptimizedState_.state.position()));
+    const auto rot_n = nRe.compose(lastOptimizedState_.state.attitude());
+    std::cout << std::fixed << "eRb RPY: " << rot_n.rpy() * fgo::constants::rad2deg << std::endl;
+
     gtsam::Vector3 gravity = gtsam::Vector3::Zero();
     gtsam::Vector3 gravity_b = gtsam::Vector3::Zero();
     if (paramsPtr_->calibGravity) {
       gravity = /*init_nedRe * */fgo::utils::gravity_ecef(lastOptimizedState_.state.position());
       gravity_b = lastOptimizedState_.state.pose().rotation().unrotate(gravity);
+      std::cout << "gravity b " << gravity_b << std::endl;
     }
 
     preIntegratorParams_ = boost::make_shared<gtsam::PreintegratedCombinedMeasurements::Params>(gravity);

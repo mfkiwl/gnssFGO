@@ -287,22 +287,8 @@ namespace fgo::integrator {
                            integratorName_ + ": PVTSource " << PVTSource.value() << " is not supported!");
       }
     }
-
     pubPVAInFGOStata_ = rosNodePtr_->create_publisher<irt_nav_msgs::msg::FGOState>("pvaInFGOState",
                                                                                    rclcpp::SensorDataQoS());
-
-    if (paramPtr_->gpType == fgo::data::GPModelType::WNOJ) {
-      interpolator_ = std::make_shared<fgo::models::GPWNOJInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
-        paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
-    } else if (paramPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolator_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
-        paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
-    } else {
-      RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": NO gpType chosen. Please choose.");
-    }
-
     RCLCPP_INFO(rosNodePtr_->get_logger(), "--------------------- GNSSLCIntegrator initialized! ---------------------");
   }
 
@@ -319,6 +305,7 @@ namespace fgo::integrator {
       return true;
     }
     static const auto baseToSensorTrans = sensorCalibManager_->getTransformationFromBase(sensorName_);
+    std::shared_ptr<fgo::models::GPInterpolator> interpolator;
 
     static gtsam::Key pose_key_j, vel_key_j, omega_key_j, bias_key_j,
       pose_key_i, vel_key_i, omega_key_i, bias_key_i,
@@ -479,6 +466,19 @@ namespace fgo::integrator {
                                                                                  << syncResult.keyIndexJ <<
                                                                                  " with time difference: "
                                                                                  << syncResult.durationFromStateI);
+
+        if (paramPtr_->gpType == fgo::data::GPModelType::WNOJ) {
+          interpolator = std::make_shared<fgo::models::GPWNOJInterpolator>(
+            gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
+            paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
+        } else if (paramPtr_->gpType == fgo::data::GPModelType::WNOA) {
+          interpolator = std::make_shared<fgo::models::GPWNOAInterpolator>(
+            gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
+            paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
+        } else {
+          RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), integratorName_ + ": NO gpType chosen. Please choose.");
+        }
+
         const double delta_t = syncResult.timestampJ - syncResult.timestampI;
         const double taui = syncResult.durationFromStateI;
         //recalculate interpolator // set up interpolator
@@ -488,9 +488,9 @@ namespace fgo::integrator {
 
         if (paramPtr_->gpType == fgo::data::GPModelType::WNOJ) {
           const auto [foundI, accI, fountJ, accJ] = findAccelerationToState(syncResult.keyIndexI, stateIDAccMap);
-          interpolator_->recalculate(delta_t, taui, accI, accJ);
+          interpolator->recalculate(delta_t, taui, accI, accJ);
         } else
-          interpolator_->recalculate(delta_t, taui);
+          interpolator->recalculate(delta_t, taui);
 
         if (integrateVelocity) {
           //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "Integrating GP interpolated PVT ...");
@@ -498,13 +498,13 @@ namespace fgo::integrator {
                                                pose_key_j, vel_key_j, omega_key_j,
                                                pvaIter->xyz_ecef, pvaIter->vel_ecef,
                                                pvaIter->xyz_var * posVarScale, pvaIter->vel_var * velVarScale,
-                                               baseToSensorTrans.translation(), interpolator_);
+                                               baseToSensorTrans.translation(), interpolator);
         } else {
           //RCLCPP_INFO_STREAM(appPtr_->get_logger(), "Integrating GP interpolated GNSS positioning ...");
           this->addGPInterpolatedGNSSFactor(pose_key_i, vel_key_i, omega_key_i,
                                             pose_key_j, vel_key_j, omega_key_j,
                                             pvaIter->xyz_ecef, pvaIter->xyz_var * posVarScale,
-                                            baseToSensorTrans.translation(), interpolator_);
+                                            baseToSensorTrans.translation(), interpolator);
         }
 
         if (integrateAttitude && pvaIter->has_heading) {
@@ -513,7 +513,7 @@ namespace fgo::integrator {
           this->addGPInterpolatedNavAttitudeFactor(pose_key_i, vel_key_i, omega_key_i,
                                                    pose_key_j, vel_key_j, omega_key_j,
                                                    pvaIter->rot_n, pvaIter->rot_var * rotVarScale,
-                                                   interpolator_, paramPtr_->attitudeType);
+                                                   interpolator, paramPtr_->attitudeType);
         }
       } else if (syncResult.status == StateMeasSyncStatus::CACHED) {
         restGNSSMeas.push_back(*pvaIter);

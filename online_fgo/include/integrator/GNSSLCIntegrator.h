@@ -56,7 +56,6 @@ namespace fgo::integrator {
 
   class GNSSLCIntegrator : public IntegratorBase {
     IntegratorGNSSLCParamsPtr paramPtr_;
-    std::shared_ptr<fgo::models::GPInterpolator> interpolator_;
 
     fgo::data::CircularDataBuffer<fgo::data::PVASolution> GNSSPVABuffer_;
     fgo::data::CircularDataBuffer<fgo::data::PVASolution> referencePVTBuffer_;

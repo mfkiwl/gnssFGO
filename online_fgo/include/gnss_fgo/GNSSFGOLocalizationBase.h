@@ -276,11 +276,12 @@ namespace gnss_fgo
           //gtsam::Vector::Map(&state_msg.vel_var[0], state.velVar.size()) = state.velVar;
           //state_msg.imu_bias.resize(state.imuBias.vector().size());
           //gtsam::Vector::Map(&state_msg.imu_bias[0], state.imuBias.vector().size()) = state.imuBias.vector();
-          state_msg.imu_bias = std::vector(state.imuBias.vector().data(),
-                                           state.imuBias.vector().data() +
-                                           state.imuBias.vector().rows() * state.imuBias.vector().cols());
-          //state_msg.imu_bias_var.resize(state.imuBiasVar.size());
-          //gtsam::Vector::Map(&state_msg.imu_bias_var[0], state.imuBiasVar.size()) = state.imuBiasVar;
+          state_msg.imu_bias.resize(state.imuBias.vector().size());
+          gtsam::Vector::Map(state_msg.imu_bias.data(), state_msg.imu_bias.size()) = state.imuBias.vector();
+          //state_msg.imu_bias = std::vector(state.imuBias.vector().data(),
+          //                                 state.imuBias.vector().data() +
+          //                                 state.imuBias.vector().rows() * state.imuBias.vector().cols());
+
           state_msg.imu_bias_var = std::vector(state.imuBiasVar.data(),
                                                state.imuBiasVar.data() +
                                                state.imuBiasVar.rows() * state.imuBiasVar.cols());

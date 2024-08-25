@@ -265,6 +265,7 @@ namespace fgo::integrator {
                                     gtsam::Values &values,
                                     fgo::solvers::FixedLagSmoother::KeyTimestampMap &keyTimestampMap,
                                     gtsam::KeyVector &relatedKeys) {
+
     static uint notifyCounter = paramPtr_->IMUMeasurementFrequency / paramPtr_->optFrequency;
     static double halfStateBetweenTime = 1. / (double) notifyCounter / 2.;
 
@@ -277,6 +278,10 @@ namespace fgo::integrator {
     static gtsam::Key lastStateJ = -1;
     static boost::circular_buffer<fgo::data::GNSSMeasurement> restGNSSMeas(10);
     static uint64_t lastPriorCbdNState = nState_;
+
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorI;
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ;
+
     nState_ = currentKeyIndexTimestampMap.end()->first;
 
     auto dataSensor = gnssDataBuffer_.get_all_buffer_and_clean();
@@ -299,19 +304,6 @@ namespace fgo::integrator {
       dataSensor.insert(dataSensor.begin(), restGNSSMeas.begin(), restGNSSMeas.end());
       restGNSSMeas.clear();
     }
-    //create GP interpolators for the factor
-    if (paramPtr_->gpType == fgo::data::GPModelType::WNOJ) {
-      interpolatorI_ = std::make_shared<fgo::models::GPWNOJInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
-        paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
-    } else if (paramPtr_->gpType == fgo::data::GPModelType::WNOA) {
-      interpolatorI_ = std::make_shared<fgo::models::GPWNOAInterpolator>(
-        gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
-        paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
-    } else {
-      RCLCPP_WARN(rosNodePtr_->get_logger(), "NO gpType chosen. Please choose.");
-      return false;
-    }
 
     auto gnssIter = dataSensor.begin();
 
@@ -325,6 +317,7 @@ namespace fgo::integrator {
         gnssIter->measMainAnt.timestamp.seconds() - gnssIter->measMainAnt.delay;   // in double
       RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), std::fixed << "Current GNSS ts: " << corrected_time_gnss_meas);
 
+      //create GP interpolators for the factor
       auto current_pred_state = timePredStates.back().second; //graph::querryCurrentPredictedState(timePredStates, corrected_time_gnss_meas);
 
       //this_gyro = current_pred_state.imuBias.correctGyroscope(this_gyro);
@@ -396,6 +389,22 @@ namespace fgo::integrator {
                                                                               <<
                                                                               " with time difference: "
                                                                               << syncResult.durationFromStateI);
+        }
+
+        if (paramPtr_->gpType == fgo::data::GPModelType::WNOJ) {
+          const auto [foundI, accI, foundJ, accJ] = findAccelerationToState(syncResult.keyIndexI, stateIDAccMap);
+          interpolatorI = std::make_shared<fgo::models::GPWNOJInterpolator>(
+            gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), delta_t, taui,
+            paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
+          interpolatorI->recalculate(delta_t, taui, accI, accJ);
+        } else if (paramPtr_->gpType == fgo::data::GPModelType::WNOA) {
+          interpolatorI = std::make_shared<fgo::models::GPWNOAInterpolator>(
+            gtsam::noiseModel::Diagonal::Variances(paramPtr_->QcGPInterpolatorFull), 0, 0,
+            paramPtr_->AutoDiffGPInterpolatedFactor, paramPtr_->GPInterpolatedFactorCalcJacobian);
+          interpolatorI->recalculate(delta_t, taui);
+        } else {
+          RCLCPP_WARN(rosNodePtr_->get_logger(), "NO gpType chosen. Please choose.");
+          return false;
         }
 
         //PSEUDORANGE DOPPLER SYNCED
@@ -471,24 +480,16 @@ namespace fgo::integrator {
           this->addGPInterpolatedTDNormalCPFactor(pose_key_i, vel_key_i, omega_key_i, cbd_key_sync, pose_key_j,
                                                   vel_key_j, omega_key_j,
                                                   gnssIter->measMainAnt.obs, consecutiveSyncs, time_synchronized,
-                                                  interpolatorI_,
-                                                  interpolatorJ_, delta_t, 0, syncResult.status, values,
+                                                  interpolatorI,
+                                                  interpolatorJ, delta_t, 0, syncResult.status, values,
                                                   keyTimestampMap); //TODO Time - TIme doesnt work atm hardcoded
         }
       } else if (syncResult.status == StateMeasSyncStatus::INTERPOLATED && paramPtr_->addGPInterpolatedFactor) {
         //recalculate interpolator // set up interpolator
         //corrected_time_gnss_meas - timestampI;
         RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "GP delta: " << delta_t << " tau: " << taui);
-        //ALSO NEEDED FOR DDCP TDCP, AND THATS IN SYNCED CASE AND IN NOT SYNCED CASE
-        if (paramPtr_->gpType == fgo::data::GPModelType::WNOJ) {
-          const auto [foundI, accI, foundJ, accJ] = findAccelerationToState(syncResult.keyIndexI, stateIDAccMap);
-          interpolatorI_->recalculate(delta_t, taui, accI, accJ);
-        } else
-          interpolatorI_->recalculate(delta_t, taui);
 
         // RCLCPP_ERROR_STREAM(appPtr_->get_logger(), "accI.head(3): " << accI.head(3) << "\n" << accI.tail(3));
-
-
 
         // here, there is no time synchronized state found, we need to use GP interpolated GNSS factor with j-1 and j
         consecutiveSyncs = 0; //we werent able to sync
@@ -507,17 +508,17 @@ namespace fgo::integrator {
             (paramPtr_->pseudorangeFactorTil == 0 || paramPtr_->pseudorangeFactorTil >= syncResult.keyIndexJ)) {
           RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "GPPRDR1 n: " << gnssIter->measMainAnt.obs.size());
           this->addGPInterpolatedGNSSPrDrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j, omega_key_j,
-                                                cbd_key_i, gnssIter->measMainAnt.obs, interpolatorI_, 1);
+                                                cbd_key_i, gnssIter->measMainAnt.obs, interpolatorI, 1);
         } else if (!paramPtr_->usePseudoRangeDoppler && paramPtr_->usePseudoRange &&
                    (paramPtr_->pseudorangeFactorTil == 0 || paramPtr_->pseudorangeFactorTil >= syncResult.keyIndexJ)) {
           RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "GPPR1 n: " << gnssIter->measMainAnt.obs.size());
           this->addGPInterpolatedPrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j, omega_key_j,
                                           cbd_key_i + biasCbdKeyOffset,
-                                          gnssIter->measMainAnt.obs, interpolatorI_, 1);
+                                          gnssIter->measMainAnt.obs, interpolatorI, 1);
         } else if (!paramPtr_->usePseudoRangeDoppler && paramPtr_->useDopplerRange) {
           RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "GPDR1 n: " << gnssIter->measMainAnt.obs.size());
           this->addGPInterpolatedDrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j, omega_key_j,
-                                          cbd_key_i + biasCbdKeyOffset, gnssIter->measMainAnt.obs, interpolatorI_, 1);
+                                          cbd_key_i + biasCbdKeyOffset, gnssIter->measMainAnt.obs, interpolatorI, 1);
         } else {
           RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), "No Pr Dr integrated!");
         }
@@ -529,18 +530,18 @@ namespace fgo::integrator {
             this->addGPInterpolatedGNSSPrDrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j,
                                                   omega_key_j,
                                                   cbd_key_i + biasCbdKeyOffset, gnssIter->measMainAnt.obs,
-                                                  interpolatorI_, 2);
+                                                  interpolatorI, 2);
           } else if (!paramPtr_->usePseudoRangeDoppler && paramPtr_->usePseudoRange &&
                      (paramPtr_->pseudorangeFactorTil == 0 ||
                       paramPtr_->pseudorangeFactorTil >= syncResult.keyIndexJ)) {
             RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "GPPR2 n: " << gnssIter->measAuxAnt.obs.size());
             this->addGPInterpolatedPrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j, omega_key_j,
                                             cbd_key_i + biasCbdKeyOffset,
-                                            gnssIter->measAuxAnt.obs, interpolatorI_, 2);
+                                            gnssIter->measAuxAnt.obs, interpolatorI, 2);
           } else if (!paramPtr_->usePseudoRangeDoppler && paramPtr_->useDopplerRange) {
             RCLCPP_INFO_STREAM(rosNodePtr_->get_logger(), "GPDR2 n: " << gnssIter->measAuxAnt.obs.size());
             this->addGPInterpolatedDrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j, omega_key_j,
-                                            cbd_key_i + biasCbdKeyOffset, gnssIter->measMainAnt.obs, interpolatorI_, 2);
+                                            cbd_key_i + biasCbdKeyOffset, gnssIter->measMainAnt.obs, interpolatorI, 2);
           } else {
             RCLCPP_WARN_STREAM(rosNodePtr_->get_logger(), "Aux Ant: No Pr Dr integrated!");
           }
@@ -551,12 +552,12 @@ namespace fgo::integrator {
         if (paramPtr_->useDDPseudoRange && paramPtr_->useRTCMDD && gnssIter->hasRTK) {
           this->addGPInterpolatedDDPrDrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j, omega_key_j,
                                               gnssIter->measRTCMDD.obs, gnssIter->measRTCMDD.refSatGPS,
-                                              gnssIter->measRTCMDD.basePosRTCM, interpolatorI_, 1);
+                                              gnssIter->measRTCMDD.basePosRTCM, interpolatorI, 1);
         }
         if (paramPtr_->useDDPseudoRange && paramPtr_->useDualAntenna && gnssIter->hasDualAntennaDD) {
           this->addGPInterpolatedDDPrDrFactor(pose_key_i, vel_key_i, omega_key_i, pose_key_j, vel_key_j, omega_key_j,
                                               gnssIter->measDualAntennaDD.obs, gnssIter->measDualAntennaDD.refSatGPS,
-                                              gnssIter->measRTCMDD.basePosRTCM, interpolatorI_, 2);
+                                              gnssIter->measRTCMDD.basePosRTCM, interpolatorI, 2);
         }
         //DOUBLE DIFFERENCE CARRIERPHASE
         //resets if lastStateJ != keyIndexJ
@@ -566,7 +567,7 @@ namespace fgo::integrator {
                                             omega_key_j/*TODO put ambiguity key*/, gnssIter->measRTCMDD.obs,
                                             gnssIter->measRTCMDD.refSatGPS.refSatPos,
                                             gnssIter->measRTCMDD.basePosRTCM,
-                                            interpolatorI_, notSlippedSatellites, lastStateJ != syncResult.keyIndexJ);
+                                            interpolatorI, notSlippedSatellites, lastStateJ != syncResult.keyIndexJ);
         }
         //DISABLED
         if (lastStateJ != syncResult.keyIndexJ && paramPtr_->useDDCarrierPhase && gnssIter->measRTCMDD.obs.size() &&
@@ -586,8 +587,8 @@ namespace fgo::integrator {
           this->addGPInterpolatedTDNormalCPFactor(pose_key_i, vel_key_i, omega_key_i, //tdAmb_key_i,
                                                   cbd_key_i + biasCbdKeyOffset, pose_key_j, vel_key_j,
                                                   omega_key_j, gnssIter->measMainAnt.obs,
-                                                  consecutiveSyncs, syncResult.timestampJ, interpolatorI_,
-                                                  interpolatorJ_,
+                                                  consecutiveSyncs, syncResult.timestampJ, interpolatorI,
+                                                  interpolatorJ,
                                                   delta_t, taui, syncResult.status,
                                                   values, keyTimestampMap,
                                                   lastGNSSInterpolated); //TODO Time - TIme doesnt work atm hardcoded
@@ -615,7 +616,7 @@ namespace fgo::integrator {
 
       //corrected_time_last_gnss = corrected_time_gnss_meas;
       if (syncResult.stateJExist()) {
-        interpolatorJ_ = interpolatorI_;
+        interpolatorJ = interpolatorI;
       }
       gnssIter++;
     }

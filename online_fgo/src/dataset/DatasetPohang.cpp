@@ -23,6 +23,7 @@
 #include <GeographicLib/UTMUPS.hpp>
 #include "dataset/impl/DatasetPohang.h"
 #include "offline_process/OfflineFGOBase.h"
+#include"integrator/BeaconIntegrator.h"
 
 namespace fgo::dataset {
 
@@ -72,7 +73,7 @@ namespace fgo::dataset {
       {"/radar/image",                      fgo::data::DataType::MonoImage},
     };
 
-    pub_gnss_ = node.create_publisher<sensor_msgs::msg::NavSatFix>("/pohang/gnss/navfix",
+    pub_gnss_ = node.create_publisher<sensor_msgs::msg::NavSatFix>("/gnss/fix",
                                                                    rclcpp::SystemDefaultsQoS());
 
     pub_baseline_ = node.create_publisher<sensor_msgs::msg::NavSatFix>("/pohang/baseline/navfix",
@@ -347,8 +348,22 @@ namespace fgo::dataset {
     std::vector<State> states;
     for (const auto &pva: data_batch.gnss)
       states.emplace_back(fgo::sensor::gnss::PVASolutionToState(pva));
-    gnss_integrator->feedRAWData(data_batch.gnss, states);
+    gnss_integrator->feedRAWData(data_batch.reference_pva, data_batch.reference_state);
+    // gnss_integrator->feedRAWData(data_batch.gnss, states);
     appPtr_->updateReferenceBuffer(data_batch.reference_pva);
+
+    // visual part
+#ifdef ENABLE_BEACON
+    static auto visual_ptr = appPtr_->getGraphPtr()->getIntegrator("BeaconIntegrator");
+    if(visual_ptr){
+        static auto visual_integrator = reinterpret_cast<const std::shared_ptr<fgo::integrator::BeaconIntegrator>&>(visual_ptr);
+        for(const auto& data : data_batch.stereo_pair) {
+            visual_integrator->processStereo(data);
+        }
+    }
+#endif
+
+
 
     //static auto beacon_integrator_base = appPtr_->getGraphPtr()->getIntegrator("BeaconIntegrator");
     if (!param_->onlyDataPlaying)

@@ -6,7 +6,12 @@
         StateSensorSyncTimeThreshold: 0.01
         IMUSensorSyncTimeThreshold: 0.01
 
-      PohangGNSSLCIntegrator:
+      BeaconIntegrator:
+        beaconPipelineConfigPath: "/workspace/gnssfgo_ws/src/fgo_code/online_fgo/config/offline_vo/beacon_pohang04.yaml"
+        integratorPlugin: "BeaconIntegrator"
+        sensorName: "stereo_left"
+
+      GNSSLCIntegrator:
         integratorPlugin: "GNSSLCIntegrator"
         sensorName: "gnss"
         notIntegrating: false
@@ -19,11 +24,11 @@
         hasRoll: false
         integrateAttitude: false
         integrateVelocity: false
-        onlyRTKFixed: true
+        onlyRTKFixed: false
 
         zeroVelocityThreshold: 0.05
-        varScaleRTKFloat: 1.
-        varScaleSingle: 1.
+        varScaleRTKFloat: 100.
+        varScaleSingle: 5000.
         varScaleHeadingSingle: 5.
         varScaleHeadingRTKFloat: 3.
         varScaleNoSolution: 1000.
@@ -32,7 +37,7 @@
         MsgSyncLowerBound: 50000000
 
         fixedVelVar: 0.5
-        posVarScale: 100.
+        posVarScale: 1.
         velVarScale: 5.
         headingVarScale: 1.
         headingOffsetDeg: 0.
@@ -43,8 +48,8 @@
         velocityType: "3d"
         noiseModelAttitude: "cauchy"
         noiseModelVelocity: "cauchy"
-        noiseModelPosition: "huber"
-        robustParamPos: 2.5
+        noiseModelPosition: "cauchy"
+        robustParamPos: 0.5
         robustParamVel: 0.5
         robustParamAtt: 0.5
 

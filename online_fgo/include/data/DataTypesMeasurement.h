@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include <cv_bridge/cv_bridge/cv_bridge.h>
+#include <cv_bridge/cv_bridge.h>
 #include <rclcpp/rclcpp.hpp>
 #include <gtsam/base/Vector.h>
 #include <gtsam/base/Matrix.h>

@@ -16,29 +16,31 @@
 //
 //
 
-
-#ifndef ONLINE_FGO_ODOMINTEGRATORBASE_H
-#define ONLINE_FGO_ODOMINTEGRATORBASE_H
+#ifndef ONLINE_FGO_VISUALINTEGRATORBASE_H
+#define ONLINE_FGO_VISUALINTEGRATORBASE_H
 
 #pragma once
 
+#include <opencv4/opencv2/opencv.hpp>
+
 #include "IntegratorBase.h"
 
-namespace fgo::integrator
-{
-    class OdomIntegratorBase : public IntegratorBase
-    {
-    protected:
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
-        IntegratorOdomParamsPtr paramPtr_;
-        std::vector<fgo::data_types::OdomResult> odomResults_;
+namespace fgo::integrator {
 
-    public:
-        explicit OdomIntegratorBase() = default;
+class VisualIntegratorBase : public IntegratorBase {
+  protected:
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
+    std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
+    IntegratorVisualParamsPtr paramPtr_;
+    // std::vector<fgo::data_types::OdomResult> odomResults_;
 
+  public:
+    explicit VisualIntegratorBase() = default;
 
+    virtual void processMonocular(const fgo::data::Image& data)  = 0;
+    virtual void processStereo(const fgo::data::StereoPair& data) =0;
+};
 
-    };
-}
-#endif //ONLINE_FGO_ODOMINTEGRATORBASE_H
+}  // namespace fgo::integrator
+
+#endif  // ONLINE_FGO_VISUALINTEGRATORBASE_H

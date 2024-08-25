@@ -353,7 +353,7 @@ namespace gnss_fgo {
                                                   init_imu_pos,
                                                   init_imu_vel);
 
-      std::cout << std::fixed << "eRb: " << lastOptimizedState_.state.R() << std::endl;
+      std::cout << std::fixed << "eRb RPY: " << lastOptimizedState_.state.attitude().rpy() * fgo::constants::rad2deg << std::endl;
       std::cout << std::fixed << "pos: " << lastOptimizedState_.state.t() << std::endl;
       std::cout << std::fixed << "vel: " << lastOptimizedState_.state.v() << std::endl;
 

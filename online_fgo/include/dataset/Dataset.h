@@ -155,7 +155,7 @@ namespace fgo::dataset {
         return measurement;
       auto iter = data.begin();
 
-      if (iter == data.end() && !fully_loaded) {
+      if (cb_load_data && iter == data.end() && !fully_loaded) {
         RCLCPP_ERROR_STREAM(rclcpp::get_logger("offline_process"),
                             "OfflineFGO DataBlock of " << data_name << ": data empty reading ... ");
         auto [has_next, new_data] = cb_load_data(timestamp.nanoseconds(), max_loading_size, data_topic);

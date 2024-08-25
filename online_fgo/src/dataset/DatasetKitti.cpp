@@ -1,3 +1,5 @@
+
+
 //  Copyright 2022 Institute of Automatic Control RWTH Aachen University
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,12 +46,12 @@ namespace fgo::dataset {
 
     data_stereo_mono = DataBlock<StereoPair>("StereoMono", "", param_->max_bag_memory_usage, FGODataTimeGetter<StereoPair>);
     data_stereo_rgb = DataBlock<StereoPair>("StereoRGB", "", param_->max_bag_memory_usage, FGODataTimeGetter<StereoPair>);
-    data_lidar = DataBlock<sensor_msgs::msg::PointCloud2::SharedPtr>("Velodyne", "", param_->max_bag_memory_usage,
+    data_lidar = DataBlock<sensor_msgs::msg::PointCloud2::SharedPtr>("Velodyne", "/kitti/velo/pointcloud", param_->max_bag_memory_usage,
                                                                      ROSMessagePtrTimeGetter<sensor_msgs::msg::PointCloud2::SharedPtr>);
     data_tf = DataBlock<Pose>("LocalPose", "/tf", param_->max_bag_memory_usage, FGODataTimeGetter<Pose>);
     it = std::make_shared<image_transport::ImageTransport>(rclcpp::Node::SharedPtr(&node));
 
-    pub_gnss_ = node.create_publisher<sensor_msgs::msg::NavSatFix>("/kitti/gnss/navfix",
+    pub_gnss_ = node.create_publisher<sensor_msgs::msg::NavSatFix>("/gnss/fix",
                                                                    rclcpp::SystemDefaultsQoS());
     pub_lidar_ = node.create_publisher<sensor_msgs::msg::PointCloud2>("/kitti/velodyne",
                                                                       rclcpp::SystemDefaultsQoS());
@@ -66,9 +68,12 @@ namespace fgo::dataset {
     data_reference.setCbOnData(func_on_gnss);
 
     pub_left_mono = it->advertise("/kitti/mono/left", 1);
+
     pub_right_mono = it->advertise("/kitti/mono/right", 1);
-    pub_left_rgb = it->advertise("/kitti/rgb/left", 1);
-    pub_right_rgb = it->advertise("/kitti/rgb/right", 1);
+
+    pub_left_rgb = it->advertise("/kitti/color/left", 1);
+
+    pub_right_rgb = it->advertise("/kitti/color/right", 1);
 
     auto func_on_stereopair_mono = [this](const std::vector<StereoPair> &pairs) -> void {
       for (const auto &pair: pairs) {
@@ -217,7 +222,7 @@ namespace fgo::dataset {
   void Kitti::parseDataFromBag()  {
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
                        "OfflineFGO Dataset " << name << ": Parsing raw data into data blocks ...");
-    const auto raw_imu_msg = readROSMessages<sensor_msgs::msg::Imu>(data_imu.data_topic);
+    const auto raw_imu_msg = readROSMessages<sensor_msgs::msg::Imu>("/kitti/oxts/imu_unsynced");
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": got imu");
     const auto raw_gps_fix_msg = readROSMessages<sensor_msgs::msg::NavSatFix>("/kitti/oxts/gps/fix");
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"), "OfflineFGO Dataset " << name << ": got navfix raw");
@@ -228,16 +233,19 @@ namespace fgo::dataset {
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
                        "OfflineFGO Dataset " << name << ": got GNSS velocity raw");
 
+    DataBlock<Pose>::DataMap tf_map;
+
     static const auto preRotateIMU = sensor_calib_manager_->getPreRotation("imu");
     DataBlock<IMUMeasurement>::DataMap imu_map;
     for (const auto &time_msg_pair: raw_imu_msg) {
       imu_map.insert(std::make_pair(time_msg_pair.first,
                                     convertIMUMsgToIMUMeasurement(time_msg_pair.second, time_msg_pair.first,
-                                                                  preRotateIMU.matrix())));
+                                                                  preRotateIMU.matrix(),
+                                                                  param_->heading_offset_deg * fgo::constants::deg2rad )));
     }
     data_imu.setData(imu_map, true);
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                       "OfflineFGO Dataset " << name << ": parsed IMU data ...");
+                       "OfflineFGO Dataset " << name << ": parsed IMU data with size " << imu_map.size());
 
     static const auto transReferenceFromBase = sensor_calib_manager_->getTransformationFromBase("reference");
     DataBlock<PVASolution>::DataMap gps_map;
@@ -245,9 +253,14 @@ namespace fgo::dataset {
 
     if (raw_gps_fix_msg.size() == raw_gps_vel_msg.size()) {
       for (size_t i = 0; i < raw_gps_fix_msg.size(); i++) {
+
+        const auto imu_between = data_imu.getDataBetween(rclcpp::Time(raw_gps_fix_msg[i].first.nanoseconds() - 5e9, RCL_ROS_TIME),
+          raw_gps_fix_msg[i].first);
+
         auto [pva, state] = sensor::gnss::parseNavFixWithTwist(raw_gps_fix_msg[i].second, raw_gps_vel_msg[i].second,
-                                                               raw_gps_fix_msg[i].first,
-                                                               transReferenceFromBase.translation());
+                                                               raw_gps_fix_msg[i].first, imu_between,
+                                                               transReferenceFromBase.translation()
+                                                               );
         gps_map.insert(std::make_pair(raw_gps_fix_msg[i].first, pva));
         state_map.insert(std::make_pair(raw_gps_fix_msg[i].first, state));
       }
@@ -268,21 +281,46 @@ namespace fgo::dataset {
     RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
                        "OfflineFGO Dataset " << name << ": parsed gnss/reference PVA data ...");
 
-    DataBlock<Pose>::DataMap tf_map;
-    for (const auto &time_msg_pair: raw_imu_msg) {
-      imu_map.insert(std::make_pair(time_msg_pair.first,
-                                    convertIMUMsgToIMUMeasurement(time_msg_pair.second, time_msg_pair.first,
-                                                                  preRotateIMU.matrix())));
+    DataBlock<Pose>::DataMap podr_map;
+    for (const auto &time_msg_pair : tf_map) {
+
+
+
+
     }
-    data_imu.setData(imu_map, true);
-    RCLCPP_INFO_STREAM(rclcpp::get_logger("offline_process"),
-                       "OfflineFGO Dataset " << name << ": parsed IMU data ...");
 
 
+    setTimestampsFromReference();
+    trimDataBlocks();
   }
 
   fgo::graph::StatusGraphConstruction Kitti::feedDataToGraph(const vector<double> &stateTimestamps) {
-    return graph::SUCCESSFUL;
+    const auto &last_timestamp = stateTimestamps.back();
+    RCLCPP_INFO(appPtr_->get_logger(), "Feeding Kitti Data");
+    auto data_batch = this->getDataBefore(last_timestamp, true);
+
+    // ToDo: @Haoming, move the imu propagation into the IMUIntegrator
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got imu of size " << data_batch.imu.size());
+    appPtr_->propagateIMU(data_batch.imu);
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got gps of size " << data_batch.reference_pva.size());
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got tf of size " << data_batch.tf.size());
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got lidar of size " << data_batch.lidar.size());
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got stereo_mono of size " << data_batch.stereo_mono.size());
+    RCLCPP_INFO_STREAM(appPtr_->get_logger(), "got stereo_rgb of size " << data_batch.stereo_rgb.size());
+
+
+    //static auto beacon_integrator_base = appPtr_->getGraphPtr()->getIntegrator("BeaconIntegrator");
+    if (!param_->onlyDataPlaying) {
+      static auto gnss_integrator_base = appPtr_->getGraphPtr()->getIntegrator("GNSSLCIntegrator");
+      static auto gnss_integrator = reinterpret_cast<const std::shared_ptr<fgo::integrator::GNSSLCIntegrator> &>(gnss_integrator_base);
+      gnss_integrator->feedRAWData(data_batch.reference_pva, data_batch.reference_state);
+      appPtr_->updateReferenceBuffer(data_batch.reference_pva);
+      for(const auto &pva : data_batch.reference_pva)
+        std::cout << "Referrence PVA " << pva.llh << " " << pva.rot_n << " " << pva.vel_n << std::endl;
+      return appPtr_->getGraphPtr()->constructFactorGraphOnTime(stateTimestamps, data_batch.imu);
+    }
+    else
+      return graph::NO_OPTIMIZATION;
   }
 
 }

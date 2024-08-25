@@ -39,6 +39,8 @@
 #include <novatel_oem7_msgs/msg/clockmodel.hpp>
 #include <novatel_oem7_msgs/msg/inspvax.hpp>
 #include <novatel_oem7_msgs/msg/inscov.hpp>
+#include <tf2_msgs/msg/detail/tf_message__traits.hpp>
+
 #include "sensor/gnss/GNSSDataParser.h"
 #include "data/DataTypesFGO.h"
 #include "utils/GNSSUtils.h"
@@ -126,9 +128,11 @@ namespace fgo::data {
     return pose;
   }
 
+
   inline IMUMeasurement convertIMUMsgToIMUMeasurement(const sensor_msgs::msg::Imu &imuMsg,
                                                       const rclcpp::Time &timestamp,
-                                                      const gtsam::Matrix33 &trans = gtsam::Matrix33::Identity()) {
+                                                      const gtsam::Matrix33 &trans = gtsam::Matrix33::Identity(),
+                                                      const double yaw_offset_rad = 0.) {
     static bool first_msg = true;
     static auto last_timestamp = timestamp;
     static auto last_gyro = gtsam::Vector3();
@@ -141,9 +145,12 @@ namespace fgo::data {
     imuMeasurement.accLin = trans * imuMeasurement.accLin;
 
     imuMeasurement.accLinCov = trans * gtsam::Matrix33(imuMsg.linear_acceleration_covariance.data());
-    imuMeasurement.AHRSOri = gtsam::Rot3(imuMsg.orientation.w, imuMsg.orientation.x, imuMsg.orientation.y,
+
+    auto rotRAW = gtsam::Rot3(imuMsg.orientation.w, imuMsg.orientation.x, imuMsg.orientation.y,
                                          imuMsg.orientation.z);
-    imuMeasurement.AHRSOri = gtsam::Rot3(trans * imuMeasurement.AHRSOri.matrix());
+    rotRAW = gtsam::Rot3(trans * rotRAW.matrix());
+
+    imuMeasurement.AHRSOri = gtsam::Rot3::RzRyRx(rotRAW.roll(), rotRAW.pitch(), rotRAW.yaw() + yaw_offset_rad);
     imuMeasurement.gyro.x() = imuMsg.angular_velocity.x;
     imuMeasurement.gyro.y() = imuMsg.angular_velocity.y;
     imuMeasurement.gyro.z() = imuMsg.angular_velocity.z;

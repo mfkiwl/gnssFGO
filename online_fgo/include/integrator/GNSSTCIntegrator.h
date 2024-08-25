@@ -51,8 +51,8 @@ namespace fgo::integrator {
   using namespace ::utils;
 
   class GNSSTCIntegrator : public IntegratorBase {
-    std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
-    std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
+    //std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
+    //std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
     IntegratorGNSSTCParamsPtr paramPtr_;
 
     uint64_t nDDIntAmb_ = 0; //counter for number of intamb

@@ -40,6 +40,7 @@ namespace fgo::dataset {
     bool onlyDataPlaying = false;
     double start_offset = 0.;
     double pre_defined_duration = 0.;
+    double heading_offset_deg = 0.;
     std::string bag_format = "sqlite";
 
     std::map<std::string, fgo::data::DataType> topic_type_map;
@@ -83,6 +84,9 @@ namespace fgo::dataset {
 
       ::utils::RosParameter<double> pre_defined_duration_("Dataset." + dataset_name + ".preDefinedDuration", *node);
       this->pre_defined_duration = pre_defined_duration_.value();
+
+      ::utils::RosParameter<double> heading_offset("Dataset." + dataset_name + ".headingOffsetDeg", 0., *node);
+      this->heading_offset_deg = heading_offset.value();
     }
   };
 }

@@ -39,10 +39,10 @@ namespace fgo::dataset {
   using namespace fgo::data;
 
   struct KittiDataBatch : DataBatch {
-    std::vector<StereoPair> stereo_mono_batch;
-    std::vector<StereoPair> stereo_rgb_batch;
-    std::vector<sensor_msgs::msg::PointCloud2::SharedPtr> lidar_batch;
-    std::vector<Pose> tf_batch;
+    std::vector<StereoPair> stereo_mono;
+    std::vector<StereoPair> stereo_rgb;
+    std::vector<sensor_msgs::msg::PointCloud2::SharedPtr> lidar;
+    std::vector<Pose> tf;
   };
 
 
@@ -92,23 +92,23 @@ namespace fgo::dataset {
 
     fgo::graph::StatusGraphConstruction feedDataToGraph(const std::vector<double> &stateTimestamps) override;
 
-    KittiDataBatch getDataBefore(double timestamp,
-                                  bool erase = false) {
+    KittiDataBatch getDataBefore(const double timestamp,
+                                 const bool erase = false) {
       KittiDataBatch batch;
       batch.timestamp_end = timestamp;
       const auto ros_timestamp = utils::secondsToROSTime(timestamp);
       batch.imu = data_imu.getDataBefore(ros_timestamp, erase);
       batch.reference_pva = data_reference.getDataBefore(ros_timestamp, erase);
       batch.reference_state = data_reference_state.getDataBefore(ros_timestamp, erase);
-      batch.stereo_mono_batch = data_stereo_mono.getDataBefore(ros_timestamp, erase);
-      batch.stereo_rgb_batch = data_stereo_rgb.getDataBefore(ros_timestamp, erase);
-      batch.lidar_batch = data_lidar.getDataBefore(ros_timestamp, erase);
-      batch.tf_batch = data_tf.getDataBefore(ros_timestamp, erase);
+      batch.stereo_mono = data_stereo_mono.getDataBefore(ros_timestamp, erase);
+      batch.stereo_rgb = data_stereo_rgb.getDataBefore(ros_timestamp, erase);
+      batch.lidar = data_lidar.getDataBefore(ros_timestamp, erase);
+      //batch.tf = data_tf.getDataBefore(ros_timestamp, erase);
       return batch;
     }
 
-    KittiDataBatch getDataBetween(double timestamp_start,
-                                   double timestamp_end) {
+    KittiDataBatch getDataBetween(const double timestamp_start,
+                                  const double timestamp_end) {
       KittiDataBatch batch;
       batch.timestamp_end = timestamp_end;
       const auto ros_timestamp_start = utils::secondsToROSTime(timestamp_start);
@@ -116,10 +116,10 @@ namespace fgo::dataset {
       batch.imu = data_imu.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       batch.reference_pva = data_reference.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       batch.reference_state = data_reference_state.getDataBetween(ros_timestamp_start, ros_timestamp_end);
-      batch.stereo_mono_batch = data_stereo_mono.getDataBetween(ros_timestamp_start, ros_timestamp_end);
-      batch.stereo_rgb_batch = data_stereo_rgb.getDataBetween(ros_timestamp_start, ros_timestamp_end);
-      batch.lidar_batch = data_lidar.getDataBetween(ros_timestamp_start, ros_timestamp_end);
-      batch.tf_batch = data_tf.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      batch.stereo_mono = data_stereo_mono.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      batch.stereo_rgb = data_stereo_rgb.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      batch.lidar = data_lidar.getDataBetween(ros_timestamp_start, ros_timestamp_end);
+      //batch.tf = data_tf.getDataBetween(ros_timestamp_start, ros_timestamp_end);
       return batch;
     }
 

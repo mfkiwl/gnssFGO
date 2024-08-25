@@ -33,8 +33,8 @@ namespace fgo::integrator
 
     class LIOIntegrator : public IntegratorBase
     {
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
-        std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
+        //std::shared_ptr<fgo::models::GPInterpolator> interpolatorI_;
+        //std::shared_ptr<fgo::models::GPInterpolator> interpolatorJ_;
         IntegratorOdomParamsPtr integratorParamPtr_;
         std::vector<fgo::data::OdomResult> odomResults_;
         std::shared_ptr<sensors::LiDAR::LIOSAM::LIOSAMOdometry> LIOSAM_;

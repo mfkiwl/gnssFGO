@@ -28,7 +28,8 @@ add_library(${ONLINEFGO_DATASET_NAME}
     DatasetKitti.cpp
     #DatasetMulran.cpp
     DatasetPohang.cpp
-    #DataRobotcar.cpp
+    #DatasetRobotcar.cpp
+    #DatasetBinLoco.cpp
 )
 target_include_directories(${ONLINEFGO_DATASET_NAME}
     PUBLIC

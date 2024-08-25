@@ -1,0 +1,62 @@
+%YAML 1.2
+---
+beacon:
+  detector: "SuperPointTRT"
+  descriptor: "TODO"
+  tracker: "LightGlueTRT"
+
+  camera_config_path: "/workspace/gnssfgo_ws/src/fgo_code/online_fgo/config/offline_vo/beacon_pohang_stereo04.yaml"
+
+  StereoOdometry:
+    depth_threshold_baseline_multiplier: 40
+    monocular_match_parallax_threshold: 15
+    stereo_match_parallax_threshold: 20
+    keyframe_low_parallax_percentage: 0.75
+
+  SuperPointTRT:
+    max_keypoint: 500
+    keypoint_threshold: 0.02
+    remove_borders: 5
+    nms_radius: 5
+    engine_path: "/workspace/beacon/model/superpoint.engine" # build the engine using python script
+    
+  LightGlueTRT:
+    match_threshold: 0.1
+    engine_path: "/workspace/beacon/model/lightglue.engine"
+
+  SuperGlueTRT:
+    match_threshold: 0.2
+    sinkhorn_iterations: 15
+    engine_path: "/workspace/beacon/model/superglue.engine" # build the engine using python script
+
+  SuperPoint:
+    use_cuda: 1 # opencv filstorage do NOT support bool ->> use 0 == false and 1 == true
+    max_keypoint: 1000
+    keypoint_threshold: 0.02
+    remove_borders: 5
+    nms_radius: 5
+    model_path: "/workspace/beacon/model/superpoint_v1.pt"
+
+  GFTT: # GoodFeature
+    max_keypoint: 1000
+    block_size: 3
+    quality_level: 0.01
+    min_keypoint_distance: 5.0
+
+  SIFT:
+    max_keypoint: 500
+    num_octave_layer: 3
+    contrast_threshold: 0.04
+    edge_threshold: 10
+    sigma: 1.6
+
+  LucasKanade:
+    min_eigen_threshold: 0.0004
+    max_iter: 30
+    iter_stop_eps: 0.01
+    win_size: 21
+    max_pyramid_level: 3
+    flag: 0
+
+  Visualization:
+    keypoint_size: 6
